@@ -9,6 +9,8 @@ compatibility: Python 3 (표준 라이브러리). 하네스(harness/ · template
 > **요구사항을 받아내는 스킬이다.** 설계(노드 · 상태)도, 코드도 만들지 않는다.
 > 끝나면 `specs/REQUIREMENTS.md` 의 harness 블록이 `APPROVED` 이고 `python harness/validate.py` 7행이 OK 다.
 
+> **시작할 때 `AGENTS.md` 를 읽는다** (역질문 · 그래프 규칙 · 종료 코드). 산출물(specs/ · trace/ …)은 지금 연 프로젝트 폴더에 만든다.
+
 ## 절대 규칙
 
 ```text

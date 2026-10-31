@@ -32,6 +32,15 @@ python ~/moonengineering/harness/install.py <내 프로젝트>    # 프로젝트
 python ~/moonengineering/harness/install.py <내 프로젝트> --check   # 프로젝트의 사본이 지금 하네스와 같은가
 ```
 
+**이 PC 어디서나 쓰려면 (Claude Code 전역)** — 프로젝트마다 연결하지 않고 `~/.claude/skills` 에 한 번:
+
+```bash
+python ~/moonengineering/harness/install.py --global          # 갱신도 같은 명령 (git pull 뒤) · --check 로 확인
+python ~/moonengineering/harness/install.py --global --with-agents   # Codex · Gemini CLI 용 ~/.agents/skills 에도
+```
+
+전역은 프로젝트에 아무것도 놓지 않는다 — 스킬이 시작할 때 하네스 폴더의 `AGENTS.md` 를 읽고, 산출물은 그때 연 폴더에 생긴다. 사용자 전역 `CLAUDE.md` 는 건드리지 않는다.
+
 install 이 프로젝트에 놓는 것: `.agents/skills/` · `.claude/skills/`(스킬 사본 — 스크립트는 설치 폴더 경로로 부른다) ·
 `AGENTS.md` 의 하네스 블록(원래 내용은 그대로) · `CLAUDE.md` 의 `@AGENTS.md` · `.harness.json`(설치 폴더 · 커밋).
 **AI 도구는 스킬을 정해진 위치(프로젝트 · 사용자 전역)에서만 읽기 때문에** 스킬 사본은 프로젝트에 두고, 스크립트 · 양식은 설치 폴더에서 부른다.

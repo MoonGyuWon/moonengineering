@@ -9,6 +9,8 @@ compatibility: Python 3 (표준 라이브러리). 하네스(harness/ · template
 > 상태값만으로 도는 그래프를 **스펙으로** 만든다. 간선은 적지 않는다 — 노드의 `requires` 가 가리키는 필드의 주인에서 계산된다.
 > 끝나면 `python harness/validate.py` 가 **exit 0** 이고 `diagrams/` 가 최신이며, 사람이 웨이브 계획을 승인했다.
 
+> **시작할 때 `AGENTS.md` 를 읽는다** (역질문 · 그래프 규칙 · 종료 코드). 산출물(specs/ · trace/ …)은 지금 연 프로젝트 폴더에 만든다.
+
 ## 들어가기 전 확인
 
 ```bash

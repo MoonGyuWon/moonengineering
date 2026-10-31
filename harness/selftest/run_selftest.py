@@ -573,6 +573,27 @@ def test_lanes():
         q.close()
 
 
+def test_install_global():
+    print("[설치 — 전역 (~/.claude/skills)]")
+    u = tmp()
+    env = {**os.environ, "USERPROFILE": str(u), "HOME": str(u), "PYTHONIOENCODING": "utf-8"}
+    G = lambda *a: subprocess.run([sys.executable, str(HARNESS / "install.py"), "--global", *a], capture_output=True, env=env)  # noqa: E731
+    try:
+        r = G()
+        home = HARNESS.parent.as_posix()
+        sk = u / ".claude" / "skills" / "graph-run" / "SKILL.md"
+        txt = sk.read_text(encoding="utf-8") if sk.exists() else ""
+        check(r.returncode == 0 and f"python {home}/harness/run.py" in txt, "전역 스킬 — 스크립트를 설치 폴더 경로로", r.stdout.decode("utf-8", "replace"))
+        check(f"{home}/AGENTS.md" in txt, "전역 스킬 — 규칙은 하네스 폴더의 AGENTS.md 를 읽는다")
+        check(not (u / ".agents").exists() and not (u / ".claude" / "CLAUDE.md").exists(), "기본은 ~/.claude/skills 만 — 전역 CLAUDE.md 는 건드리지 않는다")
+        check(G("--check").returncode == 0, "--global --check → 같다")
+        other = u / ".claude" / "skills" / "req-intake"
+        (other / ".harness.json").unlink()
+        check(G().returncode == 1, "같은 이름의 다른 스킬이 있으면 덮어쓰지 않는다")
+    finally:
+        shutil.rmtree(u, ignore_errors=True)
+
+
 def test_fable3():
     print("[3차 검증 반영]")
     import spec as SP
@@ -701,6 +722,7 @@ def main() -> int:
     test_lanes()
     test_install()
     test_fable3()
+    test_install_global()
     fails = [n for ok, n in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(fails)}/{len(RESULTS)} 통과")
     return 1 if fails else 0

@@ -84,3 +84,7 @@ selftest 103개 (frontend/backend 형 그래프를 같은 폴더 · worktree 두
 | 연결된 프로젝트에서 상대 경로 안내 · `.harness.json` commit 이 실제 버전과 다름 | 안내는 설치 폴더 절대 경로 · `dirty: true` 기록 |
 
 모드 B 는 "사람이 고를 때만"으로 낮췄다. selftest 127개.
+
+## 전역 연결 (2026-10-31)
+
+사람이 "이 PC 어디서나"를 원했다. `install.py --global` — `~/.claude/skills` 에 스킬 사본(스크립트 · 양식 · AGENTS.md 를 설치 폴더 경로로). 전역 CLAUDE.md 는 건드리지 않는다. `--with-agents` 는 `~/.agents/skills` 에도. selftest 132개.

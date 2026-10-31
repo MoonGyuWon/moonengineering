@@ -2,6 +2,11 @@
 
     python <하네스>/harness/install.py <프로젝트 폴더>            연결 (다시 돌리면 갱신 — git pull 뒤에)
     python <하네스>/harness/install.py <프로젝트 폴더> --check    프로젝트의 사본이 지금 하네스와 같은가
+    python <하네스>/harness/install.py --global [--check]         이 PC 의 Claude Code 어디서나 — ~/.claude/skills 에 연결
+                                                                  (--with-agents 면 ~/.agents/skills 에도 — Codex · Gemini CLI)
+
+전역(--global)은 프로젝트에 아무것도 놓지 않는다. 스킬이 시작할 때 하네스 폴더의 AGENTS.md 를 읽고,
+specs/ · trace/ 같은 산출물은 그때 연 프로젝트 폴더에 생긴다. 사용자 전역 CLAUDE.md 는 건드리지 않는다.
 
 프로젝트에 생기는 것
   .agents/skills/<스킬>/SKILL.md   Codex · Gemini CLI 등이 읽는 곳   } 하네스 경로(harness/ · templates/)를
@@ -60,6 +65,21 @@ def merged_agents(old: str | None) -> str:
     return old.rstrip() + "\n\n" + blk
 
 
+def rewrite_global(text: str) -> str:
+    """전역 설치는 프로젝트에 AGENTS.md 블록이 없을 수 있다 — AGENTS.md 도 설치 폴더의 것을 가리킨다."""
+    return re.sub(r"(?<![\w./\\-])AGENTS\.md", home_str() + "/AGENTS.md", rewrite(text))
+
+
+def plan_global(user: Path, with_agents: bool) -> dict[Path, str]:
+    out: dict[Path, str] = {}
+    targets = [user / ".claude" / "skills"] + ([user / ".agents" / "skills"] if with_agents else [])
+    for d in sorted(x for x in SKILLS.iterdir() if x.is_dir()):
+        txt = rewrite_global((d / "SKILL.md").read_text(encoding="utf-8"))
+        for t in targets:
+            out[t / d.name / "SKILL.md"] = txt
+    return out
+
+
 def plan(project: Path) -> dict[Path, str]:
     """프로젝트에 있어야 할 파일 → 내용."""
     out: dict[Path, str] = {}
@@ -92,9 +112,15 @@ def main(argv=None) -> int:
     except Exception:
         pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("project")
+    ap.add_argument("project", nargs="?")
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--global", dest="glob", action="store_true", help="사용자 전역 ~/.claude/skills 에 연결")
+    ap.add_argument("--with-agents", action="store_true", help="--global 때 ~/.agents/skills 에도")
     a = ap.parse_args(argv)
+    if a.glob:
+        return install_global(a)
+    if not a.project:
+        ap.error("프로젝트 폴더 또는 --global 이 필요합니다")
     project = Path(a.project).resolve()
     if not project.is_dir():
         print(f"ERROR: 프로젝트 폴더가 없습니다: {project}")
@@ -123,6 +149,34 @@ def main(argv=None) -> int:
         print("⚠ 하네스에 커밋 안 된 변경이 있습니다 — .harness.json 의 commit 이 실제 버전과 다를 수 있다 (dirty: true)")
     print(f"\n연결 완료 — 하네스 {home_str()} (commit {(head_commit() or '-')[:10]})")
     print(f"이제 AI 도구를 {project.as_posix()} 에서 열고 req-intake 스킬로 시작한다.")
+    return 0
+
+
+def install_global(a) -> int:
+    user = Path.home()
+    want = plan_global(user, a.with_agents)
+    if a.check:
+        bad = [p for p, txt in want.items() if not p.exists() or p.read_text(encoding="utf-8") != txt]
+        for p in bad:
+            print("다름:", p.as_posix())
+        print("OK — 전역 스킬이 지금 하네스와 같다" if not bad else
+              f"{len(bad)}개가 다릅니다 — `python {home_str()}/harness/install.py --global` 로 갱신")
+        return 1 if bad else 0
+    for p, txt in want.items():
+        other = p.parent.exists() and not (p.parent / ".harness.json").exists() and p.exists()
+        if other:
+            print(f"ERROR: {p.parent.as_posix()} 에 같은 이름의 다른 스킬이 있습니다 — 덮어쓰지 않습니다")
+            return 1
+    for p, txt in want.items():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        changed = not p.exists() or p.read_text(encoding="utf-8") != txt
+        p.write_text(txt, encoding="utf-8")
+        (p.parent / ".harness.json").write_text(json.dumps({"home": home_str(), "commit": head_commit(), "dirty": home_dirty()}, indent=2),
+                                                encoding="utf-8")
+        print(("갱신 " if changed else "같음 ") + p.as_posix())
+    print(f"\n전역 연결 완료 — 하네스 {home_str()} (commit {(head_commit() or '-')[:10]})")
+    print("이제 이 PC 의 어느 폴더에서든 Claude Code 를 열고 req-intake 스킬로 시작한다 (산출물은 그 폴더에 생긴다).")
+    print("갱신: 하네스 폴더에서 git pull 뒤 같은 명령을 다시. 지우려면 위 스킬 폴더들을 삭제한다.")
     return 0
 
 
