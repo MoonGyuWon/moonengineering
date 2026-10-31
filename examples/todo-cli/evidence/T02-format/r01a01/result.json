@@ -1,0 +1,14 @@
+{
+  "node": "T02-format",
+  "run_id": "run-20261031-152503",
+  "graph_version": 1,
+  "ok": true,
+  "writes": {
+    "format.ok": true
+  },
+  "inputs_digest": {
+    "todo_file": "fa0f856436c545ee",
+    "store.ok": "b5bea41b6c623f7c"
+  },
+  "gate": "python -m unittest tests.test_format"
+}

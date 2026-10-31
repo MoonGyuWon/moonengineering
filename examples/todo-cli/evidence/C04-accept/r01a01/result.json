@@ -1,0 +1,19 @@
+{
+  "node": "C04-accept",
+  "run_id": "run-20261031-152503",
+  "graph_version": 1,
+  "ok": true,
+  "writes": {
+    "check.verdict": "pass",
+    "check.failure_kind": "none"
+  },
+  "inputs_digest": {
+    "todo_file": "fa0f856436c545ee",
+    "store.ok": "b5bea41b6c623f7c",
+    "format.ok": "b5bea41b6c623f7c",
+    "cli.ok": "b5bea41b6c623f7c"
+  },
+  "gate": "python -c exit(0)",
+  "cmd": "python tools/accept.py",
+  "exit": 0
+}

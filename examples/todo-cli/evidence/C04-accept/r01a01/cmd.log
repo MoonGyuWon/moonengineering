@@ -1,0 +1,4 @@
+$ python tools/accept.py
+(cwd C:\Users\moon\myharness\moonengineering\examples\todo-cli · exit 0 · 0.4초)
+
+HARNESS_WRITES {"check.verdict": "pass", "check.failure_kind": "none"}

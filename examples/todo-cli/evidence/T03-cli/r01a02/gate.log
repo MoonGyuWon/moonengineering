@@ -1,0 +1,25 @@
+$ python -m unittest tests.test_cli
+(cwd C:\Users\moon\myharness\moonengineering\examples\todo-cli · exit 1 · 0.3초)
+
+F.
+======================================================================
+FAIL: test_add_list_done (tests.test_cli.T.test_add_list_done)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\moon\myharness\moonengineering\examples\todo-cli\tests\test_cli.py", line 22, in test_add_list_done
+    self.assertEqual(cli(self.f, "add", "우유 사기"), (0, "추가: 1 우유 사기\n", ""))
+AssertionError: Tuples differ: (0, '추가: 1 우유 사기\r\n', '') != (0, '추가: 1 우유 사기\n', '')
+
+First differing element 1:
+'추가: 1 우유 사기\r\n'
+'추가: 1 우유 사기\n'
+
+- (0, '추가: 1 우유 사기\r\n', '')
+?                 --
+
++ (0, '추가: 1 우유 사기\n', '')
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.139s
+
+FAILED (failures=1)

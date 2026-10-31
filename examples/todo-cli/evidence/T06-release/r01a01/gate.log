@@ -1,0 +1,3 @@
+$ python -c "import pathlib,sys;sys.exit(0 if pathlib.Path('dist/todo-cli-v1/todo/cli.py').exists() else 1)"
+(cwd C:\Users\moon\myharness\moonengineering\examples\todo-cli · exit 0 · 0.1초)
+

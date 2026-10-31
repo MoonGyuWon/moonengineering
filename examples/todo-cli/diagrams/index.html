@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Harness Diagrams</title>
+<!-- harness/render.py 가 만든 파일 — 손으로 고치지 않는다 -->
+<style>
+:root { --bg:#ffffff; --fg:#18181b; --muted:#71717a; --line:#e4e4e7; --code:#f4f4f5; }
+@media (prefers-color-scheme: dark) { :root { --bg:#18181b; --fg:#f4f4f5; --muted:#a1a1aa; --line:#3f3f46; --code:#27272a; } }
+body { background:var(--bg); color:var(--fg); font:15px/1.6 system-ui,sans-serif; margin:0 auto; max-width:1200px; padding:16px; }
+table { border-collapse:collapse; display:block; overflow-x:auto; margin:8px 0 16px; }
+th,td { border:1px solid var(--line); padding:4px 8px; text-align:left; font-size:13px; }
+code { background:var(--code); padding:0 4px; border-radius:4px; }
+.note { color:var(--muted); } hr { border:0; border-top:1px solid var(--line); margin:32px 0; }
+pre.mermaid { background:#ffffff; border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+</style></head><body>
+<p class=note>graph v1 · Run run-20261031-152503 · 그림이 비면 인터넷 연결(Mermaid CDN)을 확인 — 아래 표는 그대로 읽을 수 있다</p>
+<section><h1>실행 그래프</h1>
+<p class=note>생성 2026-10-31T16:09:39 · graph v1 · Run run-20261031-152503</p>
+<pre class="mermaid">flowchart LR
+  IN([&quot;입력&quot;])
+  DONE(((&quot;완료&quot;)))
+  STOP(((&quot;중단&quot;)))
+  C04_accept[&quot;C04-accept&lt;br/&gt;CODE · VERIFIED&lt;br/&gt;실행 1 · 시도 1&quot;]
+  H05_approve{{&quot;H05-approve&lt;br/&gt;HUMAN · VERIFIED&lt;br/&gt;실행 1 · 시도 1&quot;}}
+  T01_store(&quot;T01-store&lt;br/&gt;AGENT · VERIFIED&lt;br/&gt;실행 1 · 시도 1&quot;)
+  T02_format(&quot;T02-format&lt;br/&gt;AGENT · VERIFIED&lt;br/&gt;실행 1 · 시도 1&quot;)
+  T03_cli(&quot;T03-cli&lt;br/&gt;AGENT · VERIFIED&lt;br/&gt;실행 1 · 시도 3&quot;)
+  T06_release[&quot;T06-release&lt;br/&gt;CODE · VERIFIED&lt;br/&gt;실행 1 · 시도 1&quot;]
+  class C04_accept executed
+  class H05_approve executed
+  class T01_store executed
+  class T02_format executed
+  class T03_cli executed
+  class T06_release executed
+  T03_cli --&gt;|&quot;cli.ok == true&quot;| C04_accept
+  C04_accept --&gt;|&quot;check.verdict == pass&quot;| H05_approve
+  IN --&gt;|&quot;todo_file exists&quot;| T01_store
+  IN --&gt;|&quot;todo_file exists&quot;| T02_format
+  T01_store --&gt;|&quot;store.ok == true&quot;| T03_cli
+  T02_format --&gt;|&quot;format.ok == true&quot;| T03_cli
+  H05_approve --&gt;|&quot;release.action == release&quot;| T06_release
+  T06_release --&gt;|&quot;release.status == done&quot;| DONE
+  H05_approve --&gt;|&quot;release.action == stop&quot;| STOP
+  classDef pending fill:#f4f4f5,stroke:#a1a1aa,color:#3f3f46
+  classDef ready fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#1e3a8a
+  classDef running fill:#fef9c3,stroke:#ca8a04,color:#713f12
+  classDef waiting_human fill:#ffedd5,stroke:#ea580c,stroke-width:3px,color:#7c2d12
+  classDef executed fill:#dcfce7,stroke:#16a34a,color:#14532d
+  classDef failed_retryable fill:#fce7f3,stroke:#db2777,color:#831843
+  classDef failed fill:#fee2e2,stroke:#dc2626,stroke-width:3px,color:#7f1d1d
+  classDef skipped fill:#fafafa,stroke:#d4d4d8,stroke-dasharray:4 3,color:#a1a1aa
+  classDef draft fill:#ffffff,stroke:#a1a1aa,stroke-dasharray:4 3,color:#52525b
+  class IN,DONE,STOP pending</pre>
+<table><thead><tr><th>모양</th><th>종류</th><th></th><th>색</th><th>상태</th></tr></thead><tbody><tr><td>사각형</td><td>CODE</td><td></td><td>파랑 굵은 테</td><td>ready (지금 실행 가능 · 같이 있으면 병렬 웨이브)</td></tr><tr><td>둥근 사각형</td><td>AGENT</td><td></td><td>초록</td><td>executed</td></tr><tr><td>육각형</td><td>HUMAN</td><td></td><td>주황 굵은 테</td><td>waiting_human (역질문 중)</td></tr><tr><td>마름모</td><td>JUDGE (JEV)</td><td></td><td>빨강 / 분홍</td><td>failed / failed_retryable</td></tr><tr><td>실선</td><td>requires (그 조건이 참이면 준비)</td><td></td><td>회색 점선 테</td><td>아직 Run 없음 (DRAFT) · skipped</td></tr><tr><td>점선</td><td>rerun_on (그 필드가 바뀌면 다시)</td><td></td><td></td><td></td></tr></tbody></table>
+<h2>노드</h2>
+<table><thead><tr><th>노드</th><th>종류</th><th>영역</th><th>계층</th><th>구현</th><th>상태</th><th>REQ</th><th>스펙</th></tr></thead><tbody><tr><td>C04-accept</td><td>CODE</td><td>-</td><td>verification</td><td>VERIFIED</td><td>executed</td><td>REQ-F1, REQ-F2, REQ-N1</td><td><a href="../specs/nodes/C04-accept.md">specs/nodes/C04-accept.md</a></td></tr><tr><td>H05-approve</td><td>HUMAN</td><td>-</td><td>interface</td><td>VERIFIED</td><td>executed</td><td>REQ-F4</td><td><a href="../specs/nodes/H05-approve.md">specs/nodes/H05-approve.md</a></td></tr><tr><td>T01-store</td><td>AGENT</td><td>-</td><td>infra</td><td>VERIFIED</td><td>executed</td><td>REQ-N1</td><td><a href="../specs/nodes/T01-store.md">specs/nodes/T01-store.md</a></td></tr><tr><td>T02-format</td><td>AGENT</td><td>-</td><td>domain</td><td>VERIFIED</td><td>executed</td><td>REQ-F2</td><td><a href="../specs/nodes/T02-format.md">specs/nodes/T02-format.md</a></td></tr><tr><td>T03-cli</td><td>AGENT</td><td>-</td><td>interface</td><td>VERIFIED</td><td>executed</td><td>REQ-F1, REQ-F3</td><td><a href="../specs/nodes/T03-cli.md">specs/nodes/T03-cli.md</a></td></tr><tr><td>T06-release</td><td>CODE</td><td>-</td><td>infra</td><td>VERIFIED</td><td>executed</td><td>REQ-F4</td><td><a href="../specs/nodes/T06-release.md">specs/nodes/T06-release.md</a></td></tr></tbody></table></section>
+<hr>
+<section><h1>계층 · 경계</h1>
+<p class=note>생성 2026-10-31T16:09:39 · graph v1 · Run run-20261031-152503</p>
+<pre class="mermaid">flowchart TB
+  subgraph L_interface[&quot;계층: interface&quot;]
+    subgraph B_interface_cli[&quot;경계: cli&quot;]
+      T03_cli[&quot;T03-cli&quot;]
+    end
+    subgraph B_interface_release[&quot;경계: release&quot;]
+      H05_approve[&quot;H05-approve&quot;]
+    end
+  end
+  subgraph L_verification[&quot;계층: verification&quot;]
+    C04_accept[&quot;C04-accept&quot;]
+  end
+  subgraph L_domain[&quot;계층: domain&quot;]
+    subgraph B_domain_presentation[&quot;경계: presentation&quot;]
+      T02_format[&quot;T02-format&quot;]
+    end
+  end
+  subgraph L_infra[&quot;계층: infra&quot;]
+    subgraph B_infra_release[&quot;경계: release&quot;]
+      T06_release[&quot;T06-release&quot;]
+    end
+    subgraph B_infra_storage[&quot;경계: storage&quot;]
+      T01_store[&quot;T01-store&quot;]
+    end
+  end
+  T03_cli --&gt;|&quot;cli.ok&quot;| C04_accept
+  C04_accept --&gt;|&quot;check.verdict&quot;| H05_approve
+  T01_store --&gt;|&quot;store.ok&quot;| T03_cli
+  T02_format --&gt;|&quot;format.ok&quot;| T03_cli
+  H05_approve --&gt;|&quot;release.action&quot;| T06_release</pre>
+<h2>경계를 넘는 계약</h2>
+<table><thead><tr><th>보내는 계층</th><th>받는 계층</th><th>경계를 넘는 필드 (계약)</th></tr></thead><tbody><tr><td>domain</td><td>interface</td><td>format.ok</td></tr><tr><td>infra</td><td>interface</td><td>store.ok</td></tr><tr><td>interface</td><td>infra</td><td>release.action</td></tr><tr><td>interface</td><td>verification</td><td>cli.ok</td></tr><tr><td>verification</td><td>interface</td><td>check.verdict</td></tr></tbody></table></section>
+<hr>
+<section><h1>타임라인</h1>
+<p class=note>생성 2026-10-31T16:09:39 · graph v1 · Run run-20261031-152503</p>
+<p><b>DONE</b> · ready: - · 대기: - · 시도 8</p>
+<pre class="mermaid">gantt
+  title run-20261031-152503 (graph v1)
+  dateFormat YYYY-MM-DDTHH:mm:ss
+  axisFormat %H:%M:%S
+  section T01-store
+  T01-store · executed :done, 2026-10-31T15:25:03, 2026-10-31T15:26:04
+  section T02-format
+  T02-format · executed :done, 2026-10-31T15:25:03, 2026-10-31T15:26:04
+  section T03-cli
+  T03-cli · failed_retryable :crit, 2026-10-31T15:26:17, 2026-10-31T15:26:18
+  section T03-cli
+  T03-cli · failed_retryable :crit, 2026-10-31T15:26:31, 2026-10-31T15:26:32
+  section T03-cli
+  T03-cli · executed :done, 2026-10-31T15:26:48, 2026-10-31T15:26:49
+  section C04-accept
+  C04-accept · executed :done, 2026-10-31T15:26:49, 2026-10-31T15:26:50
+  section H05-approve
+  H05-approve · waiting_human :active, 2026-10-31T15:27:00, 2026-10-31T15:27:01
+  section H05-approve
+  H05-approve · executed :done, 2026-10-31T15:27:00, 2026-10-31T15:28:24
+  section T06-release
+  T06-release · executed :done, 2026-10-31T15:28:25, 2026-10-31T15:28:26</pre>
+<h2>사건 (실패 · 역질문 · 사람의 답)</h2>
+<table><thead><tr><th>seq</th><th>시각</th><th>사건</th><th>노드</th><th>내용</th></tr></thead><tbody><tr><td>10</td><td>15:26:18</td><td>실패</td><td>T03-cli</td><td>[contract_violation] 게이트 exit 1 (기대 0) — evidence\T03-cli\r01a01\gate.log</td></tr><tr><td>12</td><td>15:26:31</td><td>실패</td><td>T03-cli</td><td>[contract_violation] 게이트 exit 1 (기대 0) — evidence\T03-cli\r01a02\gate.log</td></tr><tr><td>21</td><td>15:27:00</td><td>역질문 대기</td><td>H05-approve</td><td>수용 시나리오 PASS — 배포 승인 필요</td></tr><tr><td>22</td><td>15:28:24</td><td>사람의 답</td><td>H05-approve</td><td>release — 사용자가 AskUserQuestion 에서 release 선택 (리허설)</td></tr><tr><td>29</td><td>15:28:25</td><td>Run 종료</td><td>-</td><td>SUCCESS</td></tr></tbody></table>
+<p>자세히: <a href="../memory/DECISIONS.md">DECISIONS</a> · <a href="../memory/TROUBLESHOOTING.md">TROUBLESHOOTING</a> · <code>trace/events.jsonl</code> 의 seq</p></section>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>if (window.mermaid) { mermaid.initialize({ startOnLoad: true, securityLevel: "loose" }); }</script>
+</body></html>

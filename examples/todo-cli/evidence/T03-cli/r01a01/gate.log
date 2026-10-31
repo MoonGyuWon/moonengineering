@@ -1,0 +1,32 @@
+$ python -m unittest tests.test_cli
+(cwd C:\Users\moon\myharness\moonengineering\examples\todo-cli · exit 1 · 0.2초)
+
+EE
+======================================================================
+ERROR: test_add_list_done (tests.test_cli.T.test_add_list_done)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\moon\myharness\moonengineering\examples\todo-cli\tests\test_cli.py", line 22, in test_add_list_done
+    self.assertEqual(cli(self.f, "add", "우유 사기"), (0, "추가: 1 우유 사기\n", ""))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\moon\myharness\moonengineering\examples\todo-cli\tests\test_cli.py", line 14, in cli
+    return p.returncode, p.stdout.decode("utf-8"), p.stderr.decode("utf-8")
+                         ^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc3 in position 0: invalid continuation byte
+
+======================================================================
+ERROR: test_done_missing_id (tests.test_cli.T.test_done_missing_id)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\moon\myharness\moonengineering\examples\todo-cli\tests\test_cli.py", line 28, in test_done_missing_id
+    code, out, err = cli(self.f, "done", "7")
+                     ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\moon\myharness\moonengineering\examples\todo-cli\tests\test_cli.py", line 14, in cli
+    return p.returncode, p.stdout.decode("utf-8"), p.stderr.decode("utf-8")
+                                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xbe in position 0: invalid start byte
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.134s
+
+FAILED (errors=2)
