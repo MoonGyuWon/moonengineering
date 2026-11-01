@@ -88,3 +88,25 @@ selftest 103개 (frontend/backend 형 그래프를 같은 폴더 · worktree 두
 ## 전역 연결 (2026-10-31)
 
 사람이 "이 PC 어디서나"를 원했다. `install.py --global` — `~/.claude/skills` 에 스킬 사본(스크립트 · 양식 · AGENTS.md 를 설치 폴더 경로로). 전역 CLAUDE.md 는 건드리지 않는다. `--with-agents` 는 `~/.agents/skills` 에도. selftest 132개.
+
+## 방향 전환 · 덜어내기 (2026-11-01 · Fable 검증 뒤 사람이 확정)
+
+사람의 목표: "어디서든 쓰이는 작고 가볍고 강력한 개발 하네스". 개발 과정은 그래프일 필요가 없고, 하네스는 **완성품**이 그래프 구조가 맞는지 다른 구조가 맞는지 판단해 그에 맞게 만든다.
+
+| 더한 것 | 내용 |
+| --- | --- |
+| 만드는 법 카드 | `templates/BLUEPRINT.md` · validate 9행 — 5개 판단 규칙 중 3개 이상이면 그래프 프로그램 · 단위 하나 = 계약 하나 = 검증 하나 |
+| 그래프 프로그램 런타임 | `harness/runtime/graphrt.py` — 파일 하나 · init · check · run · resume · eval(노드별 + e2e 골든셋) · serve(SSE 실시간 로그 HTML) · 예: `examples/graph-demo` |
+| 메트릭 게이트 | `harness/metric.py` — 임계값 · 기준선 회귀 · 기준선 갱신은 note + DECISIONS |
+| 규모 재정의 | S · M 은 체크리스트(M 은 계약 먼저) · 개발 그래프는 L 만 |
+
+| 덜어낸 것 (개발 그래프 기계) | 대신 |
+| --- | --- |
+| 영역 병렬 `areas` · `lanes.py`(worktree) | 같은 웨이브의 files 분리(validate 8행 + begin) · `--changed` · `gate.cwd` 는 그대로 |
+| JUDGE 노드(JEV · confidence) | AGENT 노드가 enum 으로 쓰고 게이트가 잰다 · 사람 확인은 HUMAN |
+| reducer | 필드 하나에 주인 하나 — 필드를 나눈다 |
+| 처방 가지(`rerun_on` · `max_runs`) · `report.py` | 노드 사이 순환 없음 · 실패하면 역질문 → reset 또는 graph-plan |
+| `graph_version` · migrate · `impl` | 스펙이 바뀌면 사람이 reset 또는 새 Run |
+| 계층 그림 · `diagrams/index.html` · `install --with-agents` | `graph.md` · `timeline.md` 만 |
+
+selftest 111개 (지운 기능의 검사만 빠짐) · `PYTHONUTF8` 없이도 통과 (cp949 문제는 report.py 검사에 있었다).

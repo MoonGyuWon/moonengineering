@@ -5,11 +5,11 @@
 종료 코드  0 PASS · 1 ERROR(스펙이 깨짐 — 사람에게) · 2 SHORT(아직 덜 됨 — 요구사항 미확정 등)
 
 검사행
-  1 스펙 필수 칸            5 순환 (requires 만으로 도는 순환 = 교착 · rerun_on 은 max_runs 필수)
-  2 참조 · 도달 가능성       6 추적성 (REQ → 노드 + 게이트)
-  3 조건식                  7 요구사항 확정 (미결 질문 0 · 수용 기준 · APPROVED)
-  4 필드 주인 · reducer      8 확장 (JUDGE · HUMAN · 부작용 승인 · 병렬 파일 충돌 · 계층 이름)
-                            9 영역 (areas · 노드 files 가 영역 폴더 안)   ※ gate.cwd · files 의 `..` 는 1행
+  1 스펙 필수 칸 (gate.cwd · files 의 `..` 포함)   5 순환 (requires 만으로 도는 순환 = 교착)
+  2 참조 · 도달 가능성                             6 추적성 (REQ → 노드 + 게이트)
+  3 조건식                                        7 요구사항 확정 (미결 질문 0 · 수용 기준 · APPROVED)
+  4 필드 주인 (필드 하나에 주인 하나)               8 확장 (HUMAN · 부작용 승인 · 병렬 파일 충돌)
+                                                  9 만드는 법 (BLUEPRINT 가 있을 때 — 구조 · 판단 규칙 · 검증 방법)
 """
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import spec as S  # noqa: E402
 
-REDUCERS = ("append", "replace")  # + "merge_by_key:<키>"
 CAUSES = ("transient", "input", "contract_violation", "structural")
 NUMERIC = ("int", "float")
 
@@ -90,7 +89,7 @@ def check_checklist(spec: dict, r: Report):
     r.ok(row)
     cl = spec["checklist"]
     if not cl:
-        r.add(row, "SHORT", "S 규모인데 specs/CHECKLIST.md 의 checklist 블록이 없습니다")
+        r.add(row, "SHORT", "체크리스트 모드인데 specs/CHECKLIST.md 의 checklist 블록이 없습니다")
         return
     ids = {q["id"] for q in (spec["requirements"] or {}).get("reqs", [])}
     covered = set()
@@ -104,10 +103,37 @@ def check_checklist(spec: dict, r: Report):
     r.ok("6 추적성")
 
 
+SHAPES = ("graph", "cli", "library", "web", "pipeline", "algorithm", "other")
+CRITERIA = ("stages", "nondeterministic", "repeated", "branching", "resumable")
+
+
+def check_blueprint(spec: dict, r: Report):
+    """만드는 법 카드 — 구조를 판단 규칙과 맞게 골랐는가 · 검증 방법이 있는가. 카드가 없으면 보지 않는다."""
+    bp, row = spec.get("blueprint"), "9 만드는 법"
+    if not bp:
+        return
+    r.ok(row)
+    shape, crit = bp.get("shape"), bp.get("criteria") or {}
+    if shape not in SHAPES:
+        r.add(row, "ERROR", f"shape 는 {SHAPES} 중 하나 (지금 {shape!r})")
+    unknown = sorted(set(crit) - set(CRITERIA))
+    if unknown or not all(isinstance(v, bool) for v in crit.values()):
+        r.add(row, "ERROR", f"criteria 는 {CRITERIA} 의 true/false (지금 {crit})")
+    n = sum(1 for v in crit.values() if v is True)
+    if shape == "graph" and n < 3:
+        r.add(row, "WARN", f"판단 규칙 {n}/5 인데 graph 를 골랐습니다 — 3개 미만이면 보통 일반 구조가 낫다 (이유를 reason 에)")
+    if shape not in ("graph", None) and n >= 3:
+        r.add(row, "WARN", f"판단 규칙 {n}/5 인데 {shape} 를 골랐습니다 — graph 가 맞는지 다시 본다 (이유를 reason 에)")
+    if not bp.get("verify"):
+        r.add(row, "ERROR", "verify(검증 방법)가 비어 있습니다 — 단위 · 속성 · 골든셋 · 벤치마크 · e2e 중에서 고른다")
+    if shape == "graph" and not (spec["root"] / bp.get("program", "") / "graph.json").exists() and bp.get("program"):
+        r.add(row, "WARN", f"program 폴더에 graph.json 이 아직 없습니다 — graphrt.py init {bp.get('program')}")
+
+
 def check_graph(spec: dict, r: Report):
     g = spec["graph"]
     nodes = spec["nodes"]
-    for row in ("1 스펙 필수 칸", "2 참조 · 도달", "3 조건식", "4 필드 주인", "5 순환", "6 추적성", "8 확장", "9 영역"):
+    for row in ("1 스펙 필수 칸", "2 참조 · 도달", "3 조건식", "4 필드 주인", "5 순환", "6 추적성", "8 확장"):
         r.ok(row)
     if not g:
         r.add("1 스펙 필수 칸", "SHORT", "specs/GRAPH.md 에 graph 블록이 없습니다 — graph-plan 부터")
@@ -120,7 +146,7 @@ def check_graph(spec: dict, r: Report):
     row = "1 스펙 필수 칸"
     if not nodes:
         r.add(row, "SHORT", "노드가 없습니다")
-    for k in ("graph_version", "fields", "done_when"):
+    for k in ("fields", "done_when"):
         if k not in g:
             r.add(row, "ERROR", f"graph 블록에 '{k}' 가 없습니다")
     dup = {i for i in ids if ids.count(i) > 1}
@@ -140,8 +166,6 @@ def check_graph(spec: dict, r: Report):
             r.add(row, "ERROR", f"{nid}: {t} 노드는 값으로 판정하는 gate.cmd 가 필요합니다")
         if t == "HUMAN" and not ((n.get("human") or {}).get("actions") and (n.get("human") or {}).get("field")):
             r.add(row, "ERROR", f"{nid}: HUMAN 노드는 human.actions · human.field 가 필요합니다")
-        if t == "JUDGE" and not (n.get("judge") or {}).get("questions"):
-            r.add(row, "ERROR", f"{nid}: JUDGE 노드는 judge.questions 가 필요합니다")
         for k, c in (("cmd", n.get("cmd")), ("gate.cmd", (n.get("gate") or {}).get("cmd"))):
             if isinstance(c, str) and re.match(r"^\s*python3?\s", c):
                 r.add(row, "WARN", f"{nid}: {k} 가 'python' 으로 시작합니다 — OS 마다 python/python3 이 다르니 {{python}} 을 권장")
@@ -167,7 +191,7 @@ def check_graph(spec: dict, r: Report):
         if d.get("type") == "enum" and not d.get("values"):
             r.add(row, "ERROR", f"필드 {f}: enum 은 values 가 필요합니다")
 
-    # 4 필드 주인 · reducer
+    # 4 필드 주인
     row = "4 필드 주인"
     for f, d in fdefs.items():
         os_ = S.owners(d)
@@ -176,11 +200,8 @@ def check_graph(spec: dict, r: Report):
         for o in os_:
             if o != S.INPUT_OWNER and o not in by_id:
                 r.add(row, "ERROR", f"필드 {f}: owner {o} 라는 노드가 없습니다")
-        red = d.get("reducer")
-        if len(os_) > 1 and not red:
-            r.add(row, "ERROR", f"필드 {f}: 쓰는 노드가 {len(os_)}개({', '.join(os_)}) — reducer 를 선언해야 합니다")
-        if red and not (red in REDUCERS or red.startswith("merge_by_key:")):
-            r.add(row, "ERROR", f"필드 {f}: 모르는 reducer {red!r} (append · replace · merge_by_key:<키>)")
+        if len(os_) > 1:
+            r.add(row, "ERROR", f"필드 {f}: 쓰는 노드가 {len(os_)}개({', '.join(os_)}) — 필드 하나에 주인 하나 (필드를 나눈다)")
     for n in nodes:
         for f in n.get("writes", []):
             if f not in fdefs:
@@ -217,10 +238,6 @@ def check_graph(spec: dict, r: Report):
                 r.add(row, "ERROR", f"{where}: '{c}' — {bad} 는 {f} 의 값이 아닙니다 {d.get('values')}")
         if op in (">=", "<=", ">", "<") and t not in NUMERIC:
             r.add(row, "ERROR", f"{where}: '{c}' — 크기 비교는 수 필드에만 ({f} 는 {t})")
-    for n in nodes:
-        for f in n.get("rerun_on", []):
-            if f not in fdefs:
-                r.add(row, "ERROR", f"{n.get('id')}: rerun_on 의 {f} 가 선언되지 않았습니다")
 
     # 2 참조 · 도달 — 값은 무시하고 "그 필드를 쓸 수 있는 노드가 돌 수 있나"만 본다
     row = "2 참조 · 도달"
@@ -265,11 +282,6 @@ def check_graph(spec: dict, r: Report):
     cyc = _find_cycle(adj)
     if cyc:
         r.add(row, "ERROR", "requires 만으로 도는 순환은 교착입니다 (서로를 기다림): " + " → ".join(cyc))
-    for n in nodes:
-        if n.get("rerun_on"):
-            mr = n.get("max_runs")
-            if not isinstance(mr, int) or not 1 <= mr <= 5:
-                r.add(row, "ERROR", f"{n.get('id')}: rerun_on 이 있으면 max_runs(1~5) 가 필요합니다 — 상한 없는 순환 금지")
 
     # 6 추적성
     row = "6 추적성"
@@ -279,7 +291,7 @@ def check_graph(spec: dict, r: Report):
         for q in n.get("reqs", []):
             if req_ids and q not in req_ids:
                 r.add(row, "ERROR", f"{n.get('id')}: 없는 요구사항 {q} 를 가리킵니다")
-            verified = bool((n.get("gate") or {}).get("cmd")) or n.get("type") in ("HUMAN", "JUDGE")
+            verified = bool((n.get("gate") or {}).get("cmd")) or n.get("type") == "HUMAN"
             covered[q] = covered.get(q, False) or verified
     for q in sorted(req_ids):
         if q not in covered:
@@ -298,29 +310,6 @@ def check_graph(spec: dict, r: Report):
                 r.add(row, "ERROR", f"{nid}: human.field 는 values == actions 인 enum 이어야 합니다")
             if not set(h.get("approve", [])) <= set(h.get("actions", [])):
                 r.add(row, "ERROR", f"{nid}: human.approve {h.get('approve')} 는 actions 의 일부여야 합니다")
-        if n.get("type") == "JUDGE":
-            j = n.get("judge") or {}
-            auto = j.get("auto")
-            if not isinstance(auto, (int, float)) or not 0 < auto <= 1:
-                r.add(row, "ERROR", f"{nid}: judge.auto(자동 진행 신뢰도 임계값)는 0 < x ≤ 1")
-            for q in j.get("questions", []):
-                qt, qf = q.get("type"), q.get("field")
-                d = fdefs.get(qf, {})
-                if qf not in n.get("writes", []):
-                    r.add(row, "ERROR", f"{nid}: 질문 {q.get('name')} 의 field {qf} 가 writes 에 없습니다")
-                if qt == "choice":
-                    opts = q.get("options") or []
-                    if len(opts) < 2 or d.get("type") != "enum" or sorted(opts) != sorted(d.get("values", [])):
-                        r.add(row, "ERROR", f"{nid}: choice {q.get('name')} — options 2개 이상, field 는 같은 values 의 enum")
-                elif qt == "score":
-                    sc = q.get("scale") or []
-                    if len(sc) != 2 or not 2 <= sc[1] - sc[0] + 1 <= 10 or d.get("type") not in NUMERIC:
-                        r.add(row, "ERROR", f"{nid}: score {q.get('name')} — scale [최소, 최대] 2~10단계, field 는 수")
-                elif qt == "noul":
-                    if d.get("type") != "float":
-                        r.add(row, "ERROR", f"{nid}: noul {q.get('name')} — field 는 float(예일 확률)")
-                else:
-                    r.add(row, "ERROR", f"{nid}: 질문 타입은 choice · score · noul (지금 {qt!r})")
         if n.get("side_effect"):
             # 승인은 "사람이 그 값을 골랐다" 여야 한다 — `exists` · `!=` · `in` 이면 거절해도 지나간다
             approve_of = {(m.get("human") or {}).get("field"): set((m.get("human") or {}).get("approve", []))
@@ -343,14 +332,14 @@ def check_graph(spec: dict, r: Report):
             if not n["side_effect"].get("idempotency_key"):
                 r.add(row, "ERROR", f"{nid}: 부작용 노드는 idempotency_key 가 필요합니다")
     # 병렬 파일 충돌: 순서가 보장되지 않는(= 같은 웨이브에 설 수 있는) 두 노드가 겹치는 경로를 쓰면 안 된다.
-    # 순서를 보장하는 간선만 센다 — `missing` 조건과 주인이 여럿인 필드(아무 주인 하나만 써도 참)는 순서가 아니다
+    # 순서를 보장하는 간선만 센다 — `missing` 조건은 순서가 아니다
     order: dict[str, set[str]] = {}
     for e in req_edges:
         try:
             f, op, _ = S.parse_cond(e["label"])
         except S.SpecError:
             continue
-        if op == "missing" or len(S.owners(fdefs.get(f, {}))) > 1:
+        if op == "missing":
             continue
         order.setdefault(e["source"], set()).add(e["target"])
     reach = {nid: _reachable(order, nid) for nid in by_id}
@@ -362,42 +351,6 @@ def check_graph(spec: dict, r: Report):
             both = sorted({f"{x} ↔ {y}" for x in a["files"] for y in b["files"] if S.paths_overlap(x, y)})
             if both:
                 r.add(row, "ERROR", f"{a['id']} · {b['id']}: 같은 웨이브에 설 수 있는데 겹치는 경로를 씁니다 {both}")
-    # 계층 이름
-    layers = g.get("layers") or []
-    for n in nodes:
-        if layers and n.get("layer") and n["layer"] not in layers:
-            r.add(row, "ERROR", f"{n.get('id')}: layer {n['layer']!r} 가 graph.layers {layers} 에 없습니다 (그림에서 빠진다)")
-
-    # 9 영역 — 폴더로 나눈 작업 영역 (frontend/ · backend/ · packages/<x>/ …)
-    row = "9 영역"
-    areas = g.get("areas") or {}
-    roots = {}
-    for name, a in areas.items():
-        root = S.norm_path((a or {}).get("root", ""))
-        if S.has_dotdot((a or {}).get("root", "")):
-            r.add(row, "ERROR", f"영역 {name}: root 에 `..` 를 쓰지 않습니다 (지금 {(a or {}).get('root')!r})")
-            continue
-        if not root or not root.endswith("/"):
-            r.add(row, "ERROR", f"영역 {name}: root 는 폴더('web/' 처럼 / 로 끝남)여야 합니다 (지금 {(a or {}).get('root')!r})")
-            continue
-        for other, oroot in roots.items():
-            if S.paths_overlap(root, oroot):
-                r.add(row, "ERROR", f"영역 {name}({root}) · {other}({oroot}): 영역 폴더가 겹칩니다")
-        roots[name] = root
-    for n in nodes:
-        ar = n.get("area")
-        if ar is None:
-            continue  # 영역 없는 노드 = 계약 · 통합 노드 — 영역을 가로질러 고칠 수 있다
-        if ar not in areas:
-            r.add(row, "ERROR", f"{n.get('id')}: area {ar!r} 가 graph.areas 에 없습니다 ({sorted(areas)})")
-            continue
-        if ar not in roots:
-            continue
-        if not n.get("files"):
-            r.add(row, "ERROR", f"{n.get('id')}: 영역 노드는 files 가 필요합니다 (영역 폴더 안의 경로)")
-        outside = [f for f in n.get("files", []) if not S.under(f, roots[ar])]
-        if outside:
-            r.add(row, "ERROR", f"{n.get('id')}: 영역 {ar}({roots[ar]}) 밖을 고칩니다 {outside} — 영역을 가로지르는 일은 계약 · 통합 노드(area 없음)가 한다")
 
 
 def _find_cycle(adj: dict[str, set[str]]) -> list[str] | None:
@@ -444,8 +397,9 @@ def validate(root: Path) -> Report:
         r.add("1 스펙 필수 칸", "ERROR", str(e))
         return r
     check_requirements(spec, r)
+    check_blueprint(spec, r)
     scale = (spec["requirements"] or {}).get("scale")
-    if scale == "S":
+    if scale == "S" or (spec["checklist"] and not spec["graph"]):  # 개발 그래프는 필요할 때만 — 기본은 체크리스트
         check_checklist(spec, r)
     else:
         check_graph(spec, r)

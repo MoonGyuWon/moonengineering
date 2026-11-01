@@ -9,8 +9,6 @@ W1 · 계약의 format API 만 본다. store · cli 는 보지 않는다.
   "kind": "node",
   "id": "T02-format",
   "type": "AGENT",
-  "impl": "VERIFIED",
-  "layer": "domain",
   "boundary": "presentation",
   "reqs": [
     "REQ-F2"

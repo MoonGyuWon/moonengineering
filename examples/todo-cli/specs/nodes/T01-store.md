@@ -9,8 +9,6 @@ W1 · 계약의 데이터 모양과 store API 만 본다. format · cli 는 보�
   "kind": "node",
   "id": "T01-store",
   "type": "AGENT",
-  "impl": "VERIFIED",
-  "layer": "infra",
   "boundary": "storage",
   "reqs": [
     "REQ-N1"

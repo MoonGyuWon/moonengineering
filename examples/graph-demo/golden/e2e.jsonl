@@ -1,0 +1,5 @@
+{"input": {"q": "1+2"}, "expect": {"answer": "1+2 → 3", "status": "done"}}
+{"input": {"q": "한국의 수도는?"}, "expect": {"intent": "fact", "answer": "한국의 수도는? → 서울", "status": "done"}}
+{"input": {"q": "그래프가 뭐야?"}, "expect": {"answer": "그래프가 뭐야? → 노드와 간선으로 이루어진 구조입니다.", "status": "done"}}
+{"input": {"q": "아무 말"}, "answers": {"review": {"result": "사람이 답함"}}, "expect": {"answer": "아무 말 → 사람이 답함", "status": "done"}}
+{"input": {"q": "아무 말"}, "expect": {"status": "waiting"}}

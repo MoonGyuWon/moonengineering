@@ -1,62 +1,51 @@
 {
   "run_id": "run-20261031-152503",
-  "graph_version": 1,
-  "graph_digest": "5aaaafaf6ef8e8b6",
   "started": "2026-10-31T15:25:03",
   "ended": "2026-10-31T15:28:25",
   "result": "SUCCESS",
   "fields": {
     "todo_file": {
       "value": "todo.json",
-      "version": 1,
       "by": "input",
       "seq": 2
     },
     "store.ok": {
       "value": true,
-      "version": 1,
       "by": "T01-store",
       "seq": 5
     },
     "format.ok": {
       "value": true,
-      "version": 1,
       "by": "T02-format",
       "seq": 7
     },
     "cli.ok": {
       "value": true,
-      "version": 1,
       "by": "T03-cli",
       "seq": 14
     },
     "check.verdict": {
       "value": "pass",
-      "version": 1,
       "by": "C04-accept",
       "seq": 17
     },
     "check.failure_kind": {
       "value": "none",
-      "version": 1,
       "by": "C04-accept",
       "seq": 18
     },
     "release.action": {
       "value": "release",
-      "version": 1,
       "by": "H05-approve",
       "seq": 23
     },
     "release.note": {
       "value": "사용자가 AskUserQuestion 에서 release 선택 (리허설)",
-      "version": 1,
       "by": "H05-approve",
       "seq": 24
     },
     "release.status": {
       "value": "done",
-      "version": 1,
       "by": "T06-release",
       "seq": 27
     }
@@ -66,9 +55,6 @@
       "status": "executed",
       "attempts": 1,
       "runs": 1,
-      "seen": {
-        "todo_file": 1
-      },
       "last_cause": null,
       "last_symptom": null
     },
@@ -76,9 +62,6 @@
       "status": "executed",
       "attempts": 1,
       "runs": 1,
-      "seen": {
-        "todo_file": 1
-      },
       "last_cause": null,
       "last_symptom": null
     },
@@ -86,10 +69,6 @@
       "status": "executed",
       "attempts": 3,
       "runs": 1,
-      "seen": {
-        "format.ok": 1,
-        "store.ok": 1
-      },
       "last_cause": null,
       "last_symptom": null
     },
@@ -97,9 +76,6 @@
       "status": "executed",
       "attempts": 1,
       "runs": 1,
-      "seen": {
-        "cli.ok": 1
-      },
       "last_cause": null,
       "last_symptom": null
     },
@@ -107,9 +83,6 @@
       "status": "executed",
       "attempts": 1,
       "runs": 1,
-      "seen": {
-        "check.verdict": 1
-      },
       "wait_reason": "수용 시나리오 PASS — 배포 승인 필요",
       "last_cause": null,
       "last_symptom": null
@@ -118,9 +91,6 @@
       "status": "executed",
       "attempts": 1,
       "runs": 1,
-      "seen": {
-        "release.action": 1
-      },
       "last_cause": null,
       "last_symptom": null
     }
@@ -128,5 +98,5 @@
   "attempts_total": 8,
   "budget_extra": 0,
   "last_seq": 29,
-  "digest": "a6c594afb4133752"
+  "digest": "46398c1f91c4fd3d"
 }

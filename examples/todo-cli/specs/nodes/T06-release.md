@@ -9,8 +9,6 @@ W4 · 승인 필드를 requires 에 건 부작용 노드. 같은 키로 다시 �
   "kind": "node",
   "id": "T06-release",
   "type": "CODE",
-  "impl": "VERIFIED",
-  "layer": "infra",
   "boundary": "release",
   "reqs": [
     "REQ-F4"

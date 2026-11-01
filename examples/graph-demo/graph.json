@@ -1,0 +1,15 @@
+{
+  "name": "graph-demo",
+  "version": 1,
+  "inputs": ["q"],
+  "outputs": ["intent", "answer"],
+  "nodes": [
+    {"id": "route",  "type": "CODE",  "requires": ["q exists"],                                  "writes": ["intent", "confidence"]},
+    {"id": "calc",   "type": "CODE",  "requires": ["intent == math"],                            "writes": ["result"]},
+    {"id": "lookup", "type": "CODE",  "requires": ["intent == fact"],                            "writes": ["result"]},
+    {"id": "chat",   "type": "LLM",   "requires": ["intent == other", "confidence >= 0.5"],      "writes": ["result"], "retry": 1},
+    {"id": "review", "type": "HUMAN", "requires": ["confidence < 0.5"],                          "writes": ["result"], "prompt": "분류가 불확실합니다 — 답을 직접 적어 주세요"},
+    {"id": "answer", "type": "CODE",  "requires": ["result exists"],                             "writes": ["answer"]}
+  ],
+  "done_when": ["answer exists"]
+}

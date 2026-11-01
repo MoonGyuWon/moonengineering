@@ -9,8 +9,6 @@ W2 · store · format 을 계약 API 로만 부른다. stdout 은 UTF-8.
   "kind": "node",
   "id": "T03-cli",
   "type": "AGENT",
-  "impl": "VERIFIED",
-  "layer": "interface",
   "boundary": "cli",
   "reqs": [
     "REQ-F1",

@@ -11,7 +11,7 @@
 | format.ok | bool | T02-format | `tests.test_format` 통과 |
 | cli.ok | bool | T03-cli | `tests.test_cli` 통과 |
 | check.verdict | enum pass · fail | C04-accept | 수용 시나리오 판정 |
-| check.failure_kind | enum none · unknown | C04-accept | 처방 가지 자리 (지금은 없음 → unknown 이면 STUCK → 역질문) |
+| check.failure_kind | enum none · unknown | C04-accept | 실패 분류 (unknown 이면 STUCK → 역질문) |
 | release.action | enum release · stop | H05-approve | 사람의 답 |
 | release.note | str (free_text) | H05-approve | 기록만 — 분기에 안 씀 |
 | release.status | enum done | T06-release | 배포 끝 |
@@ -37,8 +37,6 @@
 ```harness
 {
   "kind": "graph",
-  "graph_version": 1,
-  "layers": ["interface", "verification", "domain", "infra"],
   "budget": {"max_attempts_total": 20},
   "done_when": ["release.status == done"],
   "stop_when": ["release.action == stop"],

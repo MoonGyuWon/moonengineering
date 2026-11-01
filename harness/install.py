@@ -3,7 +3,6 @@
     python <하네스>/harness/install.py <프로젝트 폴더>            연결 (다시 돌리면 갱신 — git pull 뒤에)
     python <하네스>/harness/install.py <프로젝트 폴더> --check    프로젝트의 사본이 지금 하네스와 같은가
     python <하네스>/harness/install.py --global [--check]         이 PC 의 Claude Code 어디서나 — ~/.claude/skills 에 연결
-                                                                  (--with-agents 면 ~/.agents/skills 에도 — Codex · Gemini CLI)
 
 전역(--global)은 프로젝트에 아무것도 놓지 않는다. 스킬이 시작할 때 하네스 폴더의 AGENTS.md 를 읽고,
 specs/ · trace/ 같은 산출물은 그때 연 프로젝트 폴더에 생긴다. 사용자 전역 CLAUDE.md 는 건드리지 않는다.
@@ -70,14 +69,9 @@ def rewrite_global(text: str) -> str:
     return re.sub(r"(?<![\w./\\-])AGENTS\.md", home_str() + "/AGENTS.md", rewrite(text))
 
 
-def plan_global(user: Path, with_agents: bool) -> dict[Path, str]:
-    out: dict[Path, str] = {}
-    targets = [user / ".claude" / "skills"] + ([user / ".agents" / "skills"] if with_agents else [])
-    for d in sorted(x for x in SKILLS.iterdir() if x.is_dir()):
-        txt = rewrite_global((d / "SKILL.md").read_text(encoding="utf-8"))
-        for t in targets:
-            out[t / d.name / "SKILL.md"] = txt
-    return out
+def plan_global(user: Path) -> dict[Path, str]:
+    return {user / ".claude" / "skills" / d.name / "SKILL.md": rewrite_global((d / "SKILL.md").read_text(encoding="utf-8"))
+            for d in sorted(x for x in SKILLS.iterdir() if x.is_dir())}
 
 
 def plan(project: Path) -> dict[Path, str]:
@@ -115,7 +109,6 @@ def main(argv=None) -> int:
     ap.add_argument("project", nargs="?")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--global", dest="glob", action="store_true", help="사용자 전역 ~/.claude/skills 에 연결")
-    ap.add_argument("--with-agents", action="store_true", help="--global 때 ~/.agents/skills 에도")
     a = ap.parse_args(argv)
     if a.glob:
         return install_global(a)
@@ -154,7 +147,7 @@ def main(argv=None) -> int:
 
 def install_global(a) -> int:
     user = Path.home()
-    want = plan_global(user, a.with_agents)
+    want = plan_global(user)
     if a.check:
         bad = [p for p, txt in want.items() if not p.exists() or p.read_text(encoding="utf-8") != txt]
         for p in bad:

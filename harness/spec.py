@@ -4,7 +4,8 @@
     specs/REQUIREMENTS.md     {"kind": "requirements", ...}
     specs/GRAPH.md            {"kind": "graph", ...}   상태 스키마 · 완료 조건 · 예산
     specs/nodes/*.md          {"kind": "node", ...}    노드 하나 = 파일 하나 (GRAPH.md 의 "nodes" 에 넣어도 된다)
-    specs/CHECKLIST.md        S 규모(체크리스트 모드)에서만
+    specs/CHECKLIST.md        체크리스트 모드 (S · M)
+    specs/BLUEPRINT.md        {"kind": "blueprint", ...} 만드는 법 카드 — 완성품의 구조 · 검증 방법
 
 조건식은 `field op value` 한 줄뿐이다. 코드는 스펙에 넣지 않는다.
     op: == != >= <= > < in   ·   단항: `field exists` · `field missing`
@@ -18,7 +19,7 @@ from pathlib import Path
 
 BLOCK_RE = re.compile(r"```harness\s*\n(.*?)\n```", re.S)
 
-NODE_TYPES = ("CODE", "AGENT", "HUMAN", "JUDGE")
+NODE_TYPES = ("CODE", "AGENT", "HUMAN")
 FIELD_TYPES = ("str", "int", "float", "bool", "list", "dict", "enum")
 BINARY_OPS = ("==", "!=", ">=", "<=", ">", "<", " in ")
 UNARY_OPS = ("exists", "missing")
@@ -47,8 +48,9 @@ def read_blocks(path: Path) -> list[dict]:
 def load(root: Path) -> dict:
     """프로젝트 스펙 전체를 dict 하나로 읽는다. 없는 파일은 None."""
     specs = root / "specs"
-    spec = {"root": root, "requirements": None, "graph": None, "nodes": [], "checklist": None, "sources": {}}
-    for name, key in (("REQUIREMENTS.md", "requirements"), ("GRAPH.md", "graph"), ("CHECKLIST.md", "checklist")):
+    spec = {"root": root, "requirements": None, "graph": None, "nodes": [], "checklist": None, "blueprint": None, "sources": {}}
+    for name, key in (("REQUIREMENTS.md", "requirements"), ("GRAPH.md", "graph"), ("CHECKLIST.md", "checklist"),
+                      ("BLUEPRINT.md", "blueprint")):
         p = specs / name
         if not p.exists():
             continue
@@ -141,7 +143,7 @@ def eval_cond(cond: str, values: dict) -> bool:
     raise SpecError(f"모르는 연산자: {op}")
 
 
-# ── 경로 (files · 영역 root) ─────────────────────────────────────────────
+# ── 경로 (files) ──────────────────────────────────────────────────────
 #   "web/"        폴더 하나 전체 (끝의 / 가 폴더라는 표시)
 #   "web/src/**"  와일드카드 앞까지를 폴더로 본다
 #   "a/b.py"      파일 하나
@@ -170,14 +172,6 @@ def paths_overlap(a: str, b: str) -> bool:
     return _is_dir(b) and a.startswith(b)
 
 
-def under(path: str, root: str) -> bool:
-    """path 가 root(폴더) 안인가."""
-    p, r = norm_path(path), norm_path(root)
-    if not r.endswith("/"):
-        r += "/"
-    return p.startswith(r)
-
-
 def has_dotdot(p: str) -> bool:
     return ".." in str(p).replace("\\", "/").split("/")
 
@@ -203,7 +197,7 @@ def node_reads(node: dict) -> list[str]:
 
 
 def derived_edges(spec: dict) -> list[dict]:
-    """간선은 손으로 적지 않는다. requires/rerun_on 이 가리키는 필드의 주인 → 그 노드."""
+    """간선은 손으로 적지 않는다. requires 가 가리키는 필드의 주인 → 그 노드."""
     fdefs = fields(spec)
     edges = []
     for n in spec["nodes"]:
@@ -214,7 +208,4 @@ def derived_edges(spec: dict) -> list[dict]:
                 continue  # 깨진 조건식은 validate 3행이 보고한다
             for o in owners(fdefs.get(f, {})):
                 edges.append({"source": o, "target": n["id"], "label": c, "kind": "requires"})
-        for f in n.get("rerun_on", []):
-            for o in owners(fdefs.get(f, {})):
-                edges.append({"source": o, "target": n["id"], "label": f"{f} 바뀌면 다시", "kind": "rerun"})
     return edges

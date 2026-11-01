@@ -2,34 +2,31 @@
 
     python harness/run.py [--project DIR] <명령>
 
-  start   [--set f=v ...]         새 Run 시작 (입력 필드를 쓴다 · 그래프 버전을 고정)
+  start   [--set f=v ...]         새 Run 시작 (입력 필드를 쓴다)
   status  [--json]                지금 상태 · ready 웨이브 · 대기 · 실패 · 예산
   next    [--json]                지금 실행할 수 있는 노드 목록(= 웨이브). DONE 이면 exit 0, STUCK 이면 exit 2
   begin   NODE                    노드 시작 (ready 일 때만)
   finish  NODE [--set f=v ...] [--evidence 경로 ...] [--changed 파일 ...]
                                   게이트를 돌리고 통과하면 쓰기를 반영 · 실패면 원인 분류를 남긴다
-                                  --changed: 바뀐 파일(폴더 아님)이 노드의 files 안인지 본다 (병렬 · lanes.py merge 가 목록을 준다)
+                                  --changed: 바뀐 파일(폴더 아님)이 노드의 files 안인지 본다 (병렬 하위 에이전트가 보고)
   fail    NODE --cause C --symptom "..."   에이전트가 스스로 실패를 보고 (C: transient|input|contract_violation|structural)
   exec    NODE                    CODE 노드: begin → cmd → (HARNESS_WRITES {json} 줄) → 게이트 → finish
-  judge   NODE --answers JSON|파일 JEV 형식 답 기록. 신뢰도가 judge.auto 미만이면 사람 대기
   wait    NODE --reason "..."     HUMAN 노드: 사람 대기로 둔다 (역질문 화면은 스킬이 띄운다)
   answer  NODE --action A [--note ...] [--set f=v ...]   사람의 답 → 상태 · DECISIONS.md
   decide  --topic T --choice C [--note ...]              노드 밖의 사람 결정 (STUCK · 범위 · 예산) → DECISIONS.md
   reset   NODE --note "..."       사람이 고른 재실행 (failed → pending)
   extend-budget N --note "..."    시도 예산 추가 (사람 결정)
-  migrate --note "..."            Run 도중 바뀐 스펙(graph_version)을 이 Run 에 받아들인다 (사람 결정)
   rebuild                         events 에서 state.json 을 다시 만든다 (digest 출력)
 
 종료 코드  0 성공 · 1 ERROR(스펙 · 명령 오류 — 고치거나 사람에게) · 2 사람 판단 필요(역질문)
            3 실패했지만 선언된 retry 한도 안 (묻지 않고 같은 노드를 다시)
 
-answer · decide · reset · extend-budget · migrate 는 **사람의 답을 받은 뒤에만** 쓴다.
+answer · decide · reset · extend-budget 은 **사람의 답을 받은 뒤에만** 쓴다.
 하네스는 이것을 코드로 강제하지 못한다 (신뢰 경계) — 그래서 모두 memory/DECISIONS.md 에 남긴다.
 """
 from __future__ import annotations
 
 import argparse
-import copy
 import hashlib
 import json
 import os
@@ -82,79 +79,44 @@ def digest(obj) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
 
 
-def graph_digest(spec: dict) -> str:
-    """Run 이 고정되는 대상. `impl`(구현 진행 표시)은 실행 의미가 없으므로 뺀다."""
-    nodes = sorted(({k: v for k, v in n.items() if k != "impl"} for n in spec["nodes"]), key=lambda n: n.get("id", ""))
-    graph = {k: v for k, v in spec["graph"].items() if k != "nodes"}  # 안쪽 노드는 위 nodes 에 이미 있다
-    return digest({"graph": graph, "nodes": nodes})
-
-
 # ── fold ───────────────────────────────────────────────────────────────
 
-def apply_reducer(fdef: dict, old, new):
-    red = fdef.get("reducer")
-    if old is None or not red or red == "replace":
-        return copy.deepcopy(new)
-    if red == "append":
-        return list(old) + list(new)
-    if red.startswith("merge_by_key:"):
-        key = red.split(":", 1)[1]
-        merged = {item[key]: item for item in old}
-        for item in new:
-            merged[item[key]] = item
-        return list(merged.values())
-    raise S.SpecError(f"모르는 reducer {red}")
-
-
-def fold(events: list[dict], run_id: str, fdefs: dict) -> dict:
+def fold(events: list[dict], run_id: str) -> dict:
     st = None
     for ev in events:
         if ev.get("run_id") != run_id:
             continue
         t = ev["type"]
         if t == "run_start":
-            st = {"run_id": run_id, "graph_version": ev["graph_version"], "graph_digest": ev["graph_digest"],
-                  "started": ev["ts"], "ended": None, "result": None, "fields": {}, "nodes": {},
+            st = {"run_id": run_id, "started": ev["ts"], "ended": None, "result": None, "fields": {}, "nodes": {},
                   "attempts_total": 0, "budget_extra": 0, "last_seq": ev["seq"]}
             continue
         if st is None:
             continue
         st["last_seq"] = ev["seq"]
-        n = st["nodes"].setdefault(ev.get("node"), {"status": "pending", "attempts": 0, "runs": 0, "seen": {}}) \
+        n = st["nodes"].setdefault(ev.get("node"), {"status": "pending", "attempts": 0, "runs": 0}) \
             if ev.get("node") else None
         if t == "state_write":
             f = ev["field"]
-            cur = st["fields"].get(f)
-            val = apply_reducer(fdefs.get(f, {}), cur["value"] if cur else None, ev["value"])
-            st["fields"][f] = {"value": val, "version": (cur["version"] + 1) if cur else 1, "by": ev["by"], "seq": ev["seq"]}
+            st["fields"][f] = {"value": ev["value"], "by": ev["by"], "seq": ev["seq"]}
         elif t == "node_start":
-            if n["status"] in ("executed",):  # rerun
-                n["attempts"] = 0
             if n["status"] != "failed_retryable":
                 n["runs"] += 1
             n["status"] = "running"
             n["attempts"] += 1
-            n["seen"] = ev.get("seen", {})
             st["attempts_total"] += 1
         elif t == "node_end":
             n["status"] = ev["status"]
             n["last_cause"] = ev.get("cause")
             n["last_symptom"] = ev.get("symptom")
-            n.pop("proposed", None)
         elif t == "wait":
             n["status"] = "waiting_human"
             n["wait_reason"] = ev.get("reason")
-            if ev.get("proposed") is not None:
-                n["proposed"] = ev["proposed"]
         elif t == "reset":
             n["status"] = "pending"
             n["attempts"] = 0
-            n.pop("proposed", None)
         elif t == "budget":
             st["budget_extra"] += ev["add"]
-        elif t == "migrate":
-            st["graph_version"] = ev["graph_version"]
-            st["graph_digest"] = ev["graph_digest"]
         elif t == "run_end":
             st["ended"] = ev["ts"]
             st["result"] = ev["result"]
@@ -173,20 +135,7 @@ def values_of(st: dict) -> dict:
 # ── 상태에서 계산하는 것들 ──────────────────────────────────────────────
 
 def node_state(st: dict, nid: str) -> dict:
-    return st["nodes"].get(nid, {"status": "pending", "attempts": 0, "runs": 0, "seen": {}})
-
-
-def is_stale(node: dict, ns: dict, st: dict) -> bool:
-    """executed 였지만 rerun_on 필드가 그 뒤에 바뀌었고 max_runs 가 남았다."""
-    if ns["status"] != "executed" or not node.get("rerun_on"):
-        return False
-    if ns["runs"] >= node.get("max_runs", 1):
-        return False
-    for f in node["rerun_on"]:
-        cur = st["fields"].get(f, {}).get("version", 0)
-        if cur > ns["seen"].get(f, 0):
-            return True
-    return False
+    return st["nodes"].get(nid, {"status": "pending", "attempts": 0, "runs": 0})
 
 
 def ready_nodes(spec: dict, st: dict) -> list[str]:
@@ -195,9 +144,7 @@ def ready_nodes(spec: dict, st: dict) -> list[str]:
     for n in spec["nodes"]:
         ns = node_state(st, n["id"])
         retry_max = (n.get("retry") or {}).get("max", 0)
-        startable = (ns["status"] == "pending"
-                     or (ns["status"] == "failed_retryable" and ns["attempts"] <= retry_max)
-                     or is_stale(n, ns, st))
+        startable = ns["status"] == "pending" or (ns["status"] == "failed_retryable" and ns["attempts"] <= retry_max)
         if startable and all(S.eval_cond(c, vals) for c in n.get("requires", [])):
             out.append(n["id"])
     return out
@@ -236,7 +183,7 @@ def summary(spec: dict, st: dict) -> dict:
     phase = ("DONE" if done else "STOPPED" if is_stopped(spec, st) else "BLOCKED" if not ok
              else "WAITING_HUMAN" if waiting else "RUNNING" if running and not ready
              else "READY" if ready else "STUCK")
-    return {"run_id": st["run_id"], "graph_version": st["graph_version"], "phase": phase, "budget_note": why,
+    return {"run_id": st["run_id"], "phase": phase, "budget_note": why,
             "ready": ready, "running": running, "waiting_human": waiting,
             "failed": by("failed"), "failed_retryable": by("failed_retryable"),
             "executed": by("executed"), "attempts_total": st["attempts_total"],
@@ -287,7 +234,7 @@ def check_writes(spec: dict, writer: str, writes: dict):
 
 DECISIONS_HEAD = "# DECISIONS — 사람이 고른 것\n\n> 하네스가 자동으로 덧붙인다. `이벤트` 칸의 seq 로 `trace/events.jsonl` 과 이어진다.\n\n"
 TROUBLE_HEAD = ("# TROUBLESHOOTING — 증상 → 원인 → 조치\n\n> 실패가 나면 하네스가 증상 줄을 덧붙인다. 원인 · 조치 칸은 해결한 뒤 채운다.\n"
-                f"> 같은 증상이 서로 다른 Run 3곳 이상이면 패턴 — `python {HOME}/harness/report.py` 로 본다.\n\n")
+                "> 같은 증상이 여러 Run 에서 반복되면 패턴이다 — graph-plan 에서 스펙 · 계약으로 반영한다.\n\n")
 
 
 def memo(root: Path, name: str, head: str, body: str):
@@ -301,7 +248,7 @@ def memo(root: Path, name: str, head: str, body: str):
 
 def record_decision(root, st, ev, where, choice, note, options=None):
     memo(root, "DECISIONS.md", DECISIONS_HEAD,
-         f"## {ev['ts']} · {where}\n\n| 칸 | 값 |\n| --- | --- |\n| Run | {st['run_id']} (graph v{st['graph_version']}) |\n"
+         f"## {ev['ts']} · {where}\n\n| 칸 | 값 |\n| --- | --- |\n| Run | {st['run_id']} |\n"
          f"| 선택지 | {', '.join(options) if options else '-'} |\n| 고른 것 | **{choice}** |\n| 이유(note) | {note or '-'} |\n"
          f"| 이벤트 | seq {ev['seq']} |\n\n")
 
@@ -321,14 +268,13 @@ class Ctx:
         self.spec = S.load(root)
         if not self.spec["graph"]:
             raise S.SpecError("specs/GRAPH.md 의 graph 블록이 없습니다 (S 규모 체크리스트 모드에서는 run.py 를 쓰지 않습니다)")
-        self.fdefs = S.fields(self.spec)
         self.store = Store(root)
         self.by_id = {n["id"]: n for n in self.spec["nodes"]}
 
     def state(self, need=True) -> dict | None:
         evs = self.store.events()
         rid = current_run(evs)
-        st = fold(evs, rid, self.fdefs) if rid else None
+        st = fold(evs, rid) if rid else None
         if need and st is None:
             raise S.SpecError("Run 이 없습니다 — `run.py start` 부터")
         return st
@@ -343,21 +289,13 @@ class Ctx:
         return self.by_id[nid]
 
     def ev(self, st, **kw) -> dict:
-        return self.store.append({"run_id": st["run_id"], "graph_version": st["graph_version"], **kw})
+        return self.store.append({"run_id": st["run_id"], **kw})
 
 
 def human_exit(msg: str) -> int:
     print("⚠ 사람 판단 필요 — " + msg)
     print(f"  → 역질문: 사람에게 ① 지금 ② 왜 ③ 권장 ④ 고르기 ⑤ 답 을 보여 주고 ({HOME}/templates/ASK.md), 답을 `run.py answer` · `run.py decide` 로 남긴다")
     return 2
-
-
-def guard_spec(c: Ctx, st) -> int | None:
-    cur = graph_digest(c.spec)
-    if cur != st["graph_digest"]:
-        return human_exit(f"Run {st['run_id']} 은 graph v{st['graph_version']} 에 고정돼 있는데 스펙이 바뀌었습니다 "
-                          f"(지금 v{c.spec['graph'].get('graph_version')}). 이 Run 에 받아들이려면 `run.py migrate`, 아니면 새 Run 을 `start`")
-    return None
 
 
 def cmd_start(c: Ctx, a) -> int:
@@ -369,16 +307,15 @@ def cmd_start(c: Ctx, a) -> int:
     base, k = rid, 2
     while rid in used:
         rid, k = f"{base}-{k}", k + 1
-    gv = c.spec["graph"].get("graph_version")
     writes = parse_sets(a.set, a.set_json)
     check_writes(c.spec, S.INPUT_OWNER, writes)
-    c.store.append({"run_id": rid, "graph_version": gv, "type": "run_start", "graph_digest": graph_digest(c.spec)})
+    c.store.append({"run_id": rid, "type": "run_start"})
     st = c.state()
     for f, v in writes.items():
         c.ev(st, type="state_write", field=f, value=v, by=S.INPUT_OWNER)
     st = c.state()
     c.save(st)
-    print(f"Run {rid} 시작 · graph v{gv} · 입력 {list(writes)}")
+    print(f"Run {rid} 시작 · 입력 {list(writes)}")
     return cmd_next(c, a)
 
 
@@ -388,7 +325,7 @@ def cmd_status(c: Ctx, a) -> int:
     if a.json:
         print(json.dumps(s, ensure_ascii=False, indent=2))
         return 0
-    print(f"Run {s['run_id']} · graph v{s['graph_version']} · {s['phase']} · 시도 {s['attempts_total']} · digest {s['digest']}")
+    print(f"Run {s['run_id']} · {s['phase']} · 시도 {s['attempts_total']} · digest {s['digest']}")
     if s["budget_note"]:
         print("  예산:", s["budget_note"])
     for k in ("ready", "running", "waiting_human", "failed_retryable", "failed", "executed"):
@@ -457,9 +394,6 @@ def cmd_next(c: Ctx, a) -> int:
 
 def cmd_begin(c: Ctx, a, quiet=False) -> int:
     st = c.state()
-    g = guard_spec(c, st)
-    if g is not None:
-        return g
     ok, why = budget_left(c.spec, st)
     if not ok:
         return human_exit(why)
@@ -471,10 +405,8 @@ def cmd_begin(c: Ctx, a, quiet=False) -> int:
             both = [f"{x} ↔ {y}" for x in n.get("files", []) for y in c.by_id[other].get("files", []) if S.paths_overlap(x, y)]
             if both:
                 raise S.SpecError(f"{a.node} 를 시작할 수 없습니다 — 진행 중인 {other} 와 고치는 경로가 겹칩니다 {both}")
-    watch = set(S.node_reads(n)) | set(n.get("rerun_on", []))
-    seen = {f: st["fields"].get(f, {}).get("version", 0) for f in watch}
-    c.ev(st, type="node_start", node=a.node, seen=seen,
-         inputs={f: digest(st["fields"][f]["value"]) for f in watch if f in st["fields"]})
+    c.ev(st, type="node_start", node=a.node,
+         inputs={f: digest(st["fields"][f]["value"]) for f in S.node_reads(n) if f in st["fields"]})
     if not quiet:
         ns = node_state(c.state(), a.node)
         print(f"{a.node} 시작 · {ns['runs']}번째 실행 · 시도 {ns['attempts']} · 스펙 {c.spec['sources'].get(a.node)}")
@@ -543,7 +475,7 @@ def end_node(c: Ctx, st, nid, ok: bool, writes: dict, evidence: list[str], cause
     if status == "failed_retryable":
         print(f"  자동 재시도 가능 (retry {ns['attempts']}/{retry_max + 1}) — 묻지 않고 같은 노드를 다시")
         return 3
-    return human_exit(f"{nid} 실패 [{cause}] — 실패 사다리: 처방 가지가 있으면 그쪽이 ready 가 되고, 없으면 재계획(graph-plan) 또는 reset")
+    return human_exit(f"{nid} 실패 [{cause}] — 원인을 고쳐 reset 하거나 재계획(graph-plan)")
 
 
 def gate(c: Ctx, nid, st, d: Path) -> tuple[bool, str | None, list[str]]:
@@ -551,7 +483,7 @@ def gate(c: Ctx, nid, st, d: Path) -> tuple[bool, str | None, list[str]]:
     if not gt.get("cmd"):
         return True, None, []
     log = d / "gate.log"
-    cwd = c.root / gt["cwd"] if gt.get("cwd") else c.root  # 영역 폴더에서 테스트 (예: "web")
+    cwd = c.root / gt["cwd"] if gt.get("cwd") else c.root  # 하위 폴더에서 테스트 (예: "web")
     if not cwd.is_dir():
         log.write_text(f"gate.cwd {gt.get('cwd')} 폴더가 없습니다", encoding="utf-8")
         return False, f"gate.cwd {gt.get('cwd')!r} 폴더가 없습니다", [log.relative_to(c.root).as_posix()]
@@ -576,7 +508,7 @@ def first_error(log: Path) -> str:
 
 def write_result(c, d, nid, st, ok, writes, extra=None):
     (d / "result.json").write_text(json.dumps({
-        "node": nid, "run_id": st["run_id"], "graph_version": st["graph_version"], "ok": ok,
+        "node": nid, "run_id": st["run_id"], "ok": ok,
         "writes": writes, "inputs_digest": {f: digest(v["value"]) for f, v in st["fields"].items()},
         "gate": (c.node(nid).get("gate") or {}).get("cmd"), **(extra or {})}, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -641,50 +573,6 @@ def cmd_exec(c: Ctx, a) -> int:
                     cause=None if ok else "contract_violation", symptom=symptom)
 
 
-def cmd_judge(c: Ctx, a) -> int:
-    """JEV 형식: {"<질문 이름>": {"choice": "x", "confidence": 0.9, "probabilities": {...}} | {"score": 1.4, "confidence": ..} | {"yes": 0.8, "confidence": ..}}"""
-    n = c.node(a.node)
-    if n.get("type") != "JUDGE":
-        raise S.SpecError(f"{a.node} 는 JUDGE 노드가 아닙니다")
-    st = c.state()
-    if node_state(st, a.node)["status"] != "running":
-        raise S.SpecError(f"{a.node} 는 running 이 아닙니다 — 먼저 begin")
-    raw = Path(a.answers).read_text(encoding="utf-8") if Path(a.answers).exists() else a.answers
-    try:
-        ans = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise S.SpecError(f"--answers 의 JSON 이 깨졌습니다 — {e}") from e
-    if not isinstance(ans, dict):
-        raise S.SpecError("--answers 는 {\"<질문 이름>\": {...}} 객체여야 합니다")
-    j = n["judge"]
-    writes, confs = {}, []
-    for q in j["questions"]:
-        r = ans.get(q["name"])
-        if not isinstance(r, dict) or "confidence" not in r:
-            raise S.SpecError(f"질문 {q['name']} 의 답이 없거나 confidence 가 없습니다")
-        key = {"choice": "choice", "score": "score", "noul": "yes"}[q["type"]]
-        if key not in r:
-            raise S.SpecError(f"질문 {q['name']}({q['type']}) 의 답에는 '{key}' 가 있어야 합니다")
-        v = r[key]
-        if q["type"] == "score" and not q["scale"][0] <= v <= q["scale"][1]:
-            raise S.SpecError(f"질문 {q['name']}: score {v} 가 척도 {q['scale']} 밖입니다")
-        if q["type"] == "noul" and not 0 <= v <= 1:
-            raise S.SpecError(f"질문 {q['name']}: noul 은 0~1 확률입니다")
-        writes[q["field"]] = v
-        confs.append((q["name"], float(r["confidence"])))
-    check_writes(c.spec, a.node, writes)
-    d = evidence_dir(c, a.node, st)
-    (d / "judge.json").write_text(json.dumps(ans, ensure_ascii=False, indent=2), encoding="utf-8")
-    rel = (d / "judge.json").relative_to(c.root).as_posix()
-    c.ev(st, type="judge", node=a.node, answers=ans, evidence=[rel])
-    low = [(qn, cf) for qn, cf in confs if cf < j["auto"]]
-    if low:
-        c.ev(st, type="wait", node=a.node, reason=f"신뢰도 미달 {low} < auto {j['auto']}", proposed=writes)
-        return human_exit(f"{a.node}: 신뢰도가 임계값 {j['auto']} 보다 낮습니다 {low}. 제안값 {writes} — "
-                          f"`answer {a.node} --action accept` 또는 `--action override --set ...`")
-    return end_node(c, st, a.node, True, writes, [rel])
-
-
 def cmd_wait(c: Ctx, a) -> int:
     n = c.node(a.node)
     if n.get("type") != "HUMAN":
@@ -714,16 +602,8 @@ def cmd_answer(c: Ctx, a) -> int:
         if n["human"].get("note_field") and a.note:
             writes[n["human"]["note_field"]] = a.note
         options = acts
-    elif n["type"] == "JUDGE":
-        if a.action == "accept":
-            writes = ns.get("proposed") or {}
-        elif a.action == "override":
-            writes = {**(ns.get("proposed") or {}), **extra}
-        else:
-            raise S.SpecError("JUDGE 대기의 답은 accept · override 입니다")
-        options = ["accept", "override"]
     else:
-        raise S.SpecError(f"{a.node} 는 HUMAN · JUDGE 노드가 아닙니다")
+        raise S.SpecError(f"{a.node} 는 HUMAN 노드가 아닙니다")
     ev = c.ev(st, type="answer", node=a.node, action=a.action, note=a.note, writes=writes)
     record_decision(c.root, st, ev, f"{a.node} ({n['type']})", a.action + (f" {extra}" if extra else ""), a.note, options)
     return end_node(c, c.state(), a.node, True, writes, [])
@@ -752,13 +632,6 @@ def cmd_extend(c: Ctx, a) -> int:
     st = c.state()
     ev = c.ev(st, type="budget", add=a.n, note=a.note)
     record_decision(c.root, st, ev, "시도 예산 추가", f"+{a.n}", a.note)
-    return cmd_next(c, argparse.Namespace(json=False))
-
-
-def cmd_migrate(c: Ctx, a) -> int:
-    st = c.state()
-    ev = c.ev(st, type="migrate", graph_version=c.spec["graph"].get("graph_version"), graph_digest=graph_digest(c.spec), note=a.note)
-    record_decision(c.root, st, ev, "Run 도중 스펙 변경 수용", f"v{st['graph_version']} → v{ev['graph_version']}", a.note)
     return cmd_next(c, argparse.Namespace(json=False))
 
 
@@ -794,21 +667,19 @@ def main(argv=None) -> int:
     sp = p("fail", True); sp.add_argument("--cause", choices=CAUSES, required=True); sp.add_argument("--symptom", required=True)
     sp.add_argument("--evidence", action="append")
     sp = p("exec", True); sp.add_argument("--cause", choices=CAUSES)
-    sp = p("judge", True); sp.add_argument("--answers", required=True)
     sp = p("wait", True); sp.add_argument("--reason", required=True)
     sp = p("answer", True); sp.add_argument("--action", required=True); sp.add_argument("--note"); sp.add_argument("--set", action="append")
     sp = p("decide"); sp.add_argument("--topic", required=True); sp.add_argument("--choice", required=True)
     sp.add_argument("--note"); sp.add_argument("--options")
     sp = p("reset", True); sp.add_argument("--note", required=True)
     sp = p("extend-budget"); sp.add_argument("n", type=int); sp.add_argument("--note", required=True)
-    sp = p("migrate"); sp.add_argument("--note", required=True)
     p("rebuild")
     a = ap.parse_args(argv)
     try:
         c = Ctx(S.project_dir(a.project))
         fn = {"start": cmd_start, "status": cmd_status, "next": cmd_next, "begin": cmd_begin, "finish": cmd_finish,
-              "fail": cmd_fail, "exec": cmd_exec, "judge": cmd_judge, "wait": cmd_wait, "answer": cmd_answer,
-              "decide": cmd_decide, "reset": cmd_reset, "extend-budget": cmd_extend, "migrate": cmd_migrate,
+              "fail": cmd_fail, "exec": cmd_exec, "wait": cmd_wait, "answer": cmd_answer,
+              "decide": cmd_decide, "reset": cmd_reset, "extend-budget": cmd_extend,
               "rebuild": cmd_rebuild}[a.cmd]
         return fn(c, a)
     except S.SpecError as e:

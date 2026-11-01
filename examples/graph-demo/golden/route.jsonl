@@ -1,0 +1,8 @@
+{"input": {"q": "1+2"}, "expect": {"intent": "math"}}
+{"input": {"q": "(3 + 4) * 2"}, "expect": {"intent": "math"}}
+{"input": {"q": "10 / 4"}, "expect": {"intent": "math"}}
+{"input": {"q": "42"}, "expect": {"intent": "other"}}
+{"input": {"q": "한국의 수도는?"}, "expect": {"intent": "fact"}}
+{"input": {"q": "광속이 얼마야"}, "expect": {"intent": "fact"}}
+{"input": {"q": "그래프가 뭐야?"}, "expect": {"intent": "other", "confidence": 0.6}}
+{"input": {"q": "아무 말"}, "expect": {"intent": "other", "confidence": 0.3}}

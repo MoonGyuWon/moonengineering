@@ -12,14 +12,19 @@
 2 스테이크홀더   누가 쓰고 · 결정하고 · 영향받는가 · 충돌 지점
 3 요구사항       REQ 마다 값으로 판정되는 수용 기준 · 미결 질문 0 → APPROVED
 3-b 도구 선정    필요한 능력마다 후보 비교(웹 확인 / 알고 있는 정보 구분) → 사람이 고름
-4 플랜 · 스펙    계약(상태 스키마 · 인터페이스 · 수용 테스트) 먼저 → task 노드          graph-plan
-5 실행           ready 웨이브 → 게이트 → 이벤트 → 그림 · 문제가 생기면 역질문           graph-run
+4 만드는 법 카드 완성품 구조(그래프 프로그램 / 일반 구조) · 단위마다 검증 방법             graph-plan
+4-b 플랜        S · M 체크리스트 (M 은 계약 먼저) · L 개발 그래프 (계약 → task 노드)
+5 실행           단계 · 웨이브 → 게이트(종료 코드 · 지표) → 기록 · 문제가 생기면 역질문     graph-run
 ```
 
 - **상태값만으로 돈다** — 노드는 `requires`(조건)를 선언한다. `pending` 이고 조건이 모두 참이면 ready, ready 집합이 곧 병렬 웨이브다.
-- **역질문이 기본이다** — 실패 · 막힘 · 저신뢰 판단 · 해석이 둘 이상이면 멈추고 5칸으로 묻는다. 답은 기록된다.
-- **가볍다** — S 규모(1~3단계)는 그래프 없이 체크리스트 한 장으로 끝난다.
-- **폴더 단위 병렬** — `web/` · `api/` 처럼 영역을 나누면 계약(W0) 뒤 영역마다 하위 에이전트가 동시에 만들고 통합 노드가 합친다. 기본은 같은 폴더, 빌드가 부딪히면 사람이 골라 영역별 git worktree.
+- **역질문이 기본이다** — 실패 · 막힘 · 사람 승인 · 해석이 둘 이상이면 멈추고 5칸으로 묻는다. 답은 기록된다.
+- **개발 과정은 가볍게** — S · M 은 체크리스트로 끝난다. 개발 그래프는 L(여러 모듈 · 부작용 승인 · 승인된 병렬)에서만.
+- **완성품은 맞는 구조로** — 만드는 법 카드(`templates/BLUEPRINT.md`)의 5개 규칙 중 3개 이상이면 그래프 프로그램:
+  `harness/runtime/graphrt.py`(파일 하나 · 표준 라이브러리)가 프로그램에 복사돼 하네스 없이 돈다 — 노드 하나 = 파일 하나 = 골든셋 하나,
+  `eval` 로 노드만 · 전체 회귀, `serve` 로 실시간 로그 화면. 예: `examples/graph-demo`.
+- **수치로 판정한다** — 정확도 · 지연 같은 지표는 `harness/metric.py` 가 임계값 · 기준선 회귀로 게이트한다 (0 통과 · 1 실패).
+- **승인된 병렬** — 같은 웨이브의 노드끼리 파일이 겹치지 않으면(validate 8행) 하위 에이전트가 동시에 만들고, 바뀐 파일 ⊆ `files` 를 하네스가 본다.
 - **도구 중립** — 규칙은 `AGENTS.md`, 스킬은 [Agent Skills 표준](https://agentskills.io/specification)의 `.agents/skills/`.
 
 ## 시작하는 법
@@ -36,7 +41,6 @@ python ~/moonengineering/harness/install.py <내 프로젝트> --check   # 프�
 
 ```bash
 python ~/moonengineering/harness/install.py --global          # 갱신도 같은 명령 (git pull 뒤) · --check 로 확인
-python ~/moonengineering/harness/install.py --global --with-agents   # Codex · Gemini CLI 용 ~/.agents/skills 에도
 ```
 
 전역은 프로젝트에 아무것도 놓지 않는다 — 스킬이 시작할 때 하네스 폴더의 `AGENTS.md` 를 읽고, 산출물은 그때 연 폴더에 생긴다. 사용자 전역 `CLAUDE.md` 는 건드리지 않는다.
@@ -55,7 +59,7 @@ install 이 프로젝트에 놓는 것: `.agents/skills/` · `.claude/skills/`(�
 
 - (하네스를 고칠 때) 스킬은 이 저장소의 `.agents/skills/` 만 고치고 `python harness/sync_skills.py` 로 `.claude/skills/` 를 다시 만든다. 연결된 프로젝트는 install 을 다시 돌린다.
 - `python` 은 이 PC 의 Python 3 (macOS/Linux 는 보통 `python3`). 노드 스펙의 명령에는 `{python}` 을 쓴다.
-- 그림: `diagrams/*.md` 의 Mermaid 는 GitHub · GitLab · Obsidian 에서 바로, VS Code 는 Markdown Preview Mermaid Support 확장으로 보인다. 못 그리는 곳이면 `diagrams/index.html` 을 브라우저로.
+- 그림: `diagrams/*.md` 의 Mermaid 는 GitHub · GitLab · Obsidian 에서 바로, VS Code 는 Markdown Preview Mermaid Support 확장으로 보인다.
 
 ## 명령 · 문서가 있는 곳 (한 곳씩)
 
@@ -64,10 +68,12 @@ install 이 프로젝트에 놓는 것: `.agents/skills/` · `.claude/skills/`(�
 | 규칙 (판단 먼저 · 목표 중심 · 역질문 · 그래프 규칙 · 종료 코드) | `AGENTS.md` |
 | 실행 명령 전체 · 종료 코드 | `python harness/run.py -h` |
 | 사람의 답을 남기는 명령 · 역질문 5칸 | `templates/ASK.md` |
-| 노드 스펙의 모든 칸 · 처방 가지 모양 | `templates/NODE.md` |
-| 구조 검사 8행 | `python harness/validate.py -h` |
-| 그림 · 실패 집계 · 스킬 동기화 · 하네스 자체 검사 | `harness/render.py` · `report.py` · `sync_skills.py` · `selftest/run_selftest.py` |
-| 폴더 단위 병렬 (frontend/backend 등) | 설계 `graph-plan` B1 "영역 분할" · 실행 `graph-run` "병렬 웨이브" · worktree `python harness/lanes.py -h` |
+| 노드 스펙의 모든 칸 | `templates/NODE.md` |
+| 구조 검사 9행 | `python harness/validate.py -h` |
+| 만드는 법 카드 (구조 판단 5규칙 · 구조별 단위와 검증) | `templates/BLUEPRINT.md` |
+| 그래프 프로그램 런타임 (init · check · run · resume · eval · serve) | `python harness/runtime/graphrt.py -h` |
+| 메트릭 게이트 (임계값 · 기준선 회귀) | `python harness/metric.py -h` |
+| 그림 · 스킬 동기화 · 하네스 자체 검사 | `harness/render.py` · `sync_skills.py` · `selftest/run_selftest.py` |
 | 출처 · 리허설 · 독립 검증 기록 | `docs/HISTORY.md` |
 
 ## 파일 지도
@@ -76,16 +82,17 @@ install 이 프로젝트에 놓는 것: `.agents/skills/` · `.claude/skills/`(�
 AGENTS.md  CLAUDE.md  README.md
 .agents/skills/      req-intake · graph-plan · graph-run — 정본
 .claude/skills/      복사본 (sync_skills.py 가 만든다)
-templates/           QUESTION_BANK · REQUIREMENTS · CHECKLIST · GRAPH · NODE · ASK
-harness/             spec · validate · run · render · report · sync_skills · lanes(영역 worktree) · install(프로젝트 연결) · selftest/
-examples/            리허설 — csv-summary (S) · todo-cli (M)
+templates/           QUESTION_BANK · REQUIREMENTS · BLUEPRINT · CHECKLIST · GRAPH · NODE · ASK
+harness/             spec · validate · run · render · metric · sync_skills · install(프로젝트 연결) · selftest/
+harness/runtime/     graphrt.py — 그래프 프로그램 런타임 (프로그램에 복사된다)
+examples/            리허설 — csv-summary (체크리스트) · todo-cli (개발 그래프) · graph-demo (그래프 프로그램)
 docs/HISTORY.md
 
 (하네스를 쓰는 프로젝트에 생기는 것)
-specs/               REQUIREMENTS · GRAPH · nodes/ · contracts/ · CHECKLIST(S)
+specs/               REQUIREMENTS · BLUEPRINT · CHECKLIST(S · M) · GRAPH · nodes/ · contracts/ (L)
 trace/events.jsonl   정본 — 모든 일이 한 줄씩 (seq)
 state/state.json     이벤트를 접은 캐시 (`run.py rebuild`)
 evidence/<노드>/     result.json · gate.log · cmd.log — 실행 · 시도마다
 memory/              DECISIONS.md(사람이 고른 것) · TROUBLESHOOTING.md(증상 → 원인 → 조치)
-diagrams/            graph · architecture · timeline (.md) · index.html — 자동 생성
+diagrams/            graph · timeline (.md) — 자동 생성
 ```

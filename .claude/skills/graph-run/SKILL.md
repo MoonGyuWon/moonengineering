@@ -1,6 +1,6 @@
 ---
 name: graph-run
-description: validate 가 PASS 인 스펙을 상태값만으로 실행한다 — run.py next 로 ready 웨이브를 계산하고, 노드마다 스펙대로 구현 · 실행한 뒤 게이트(값으로 판정)를 돌려 이벤트 · 증거를 남기고 그림을 갱신한다. 실패 · STUCK · 예산 소진 · JUDGE 저신뢰 · HUMAN 노드에서는 멈추고 5칸 역질문으로 사람에게 묻고, 답을 run.py answer/decide/reset 으로 남긴다. 승인된 경우에만 같은 웨이브를 병렬 에이전트로 돌린다(도구가 지원할 때). 끝나면 증거 기반 검토(문제 최대 3개)와 실패 집계를 보고한다. S 규모는 CHECKLIST 를 단계별로 실행한다. "실행해줘", "다음 노드", "이어서 해줘", "결과 검토" 에서 사용한다.
+description: validate 가 PASS 인 스펙을 상태값만으로 실행한다 — run.py next 로 ready 웨이브를 계산하고, 노드마다 스펙대로 구현 · 실행한 뒤 게이트(값으로 판정)를 돌려 이벤트 · 증거를 남기고 그림을 갱신한다. 실패 · STUCK · 예산 소진 · HUMAN 노드에서는 멈추고 5칸 역질문으로 사람에게 묻고, 답을 run.py answer/decide/reset 으로 남긴다. 승인된 경우에만 같은 웨이브를 병렬 에이전트로 돌린다(도구가 지원할 때). 끝나면 증거 기반 검토(문제 최대 3개)와 실패 집계를 보고한다. 체크리스트 모드(S · M)는 CHECKLIST 를 단계별로 실행한다. "실행해줘", "다음 노드", "이어서 해줘", "결과 검토" 에서 사용한다.
 compatibility: Python 3 (표준 라이브러리). 하네스(harness/ · templates/)는 같은 폴더에 있거나 install.py 로 연결한다. Agent Skills 표준 — Claude Code · Codex · Gemini CLI 등.
 ---
 
@@ -17,7 +17,7 @@ compatibility: Python 3 (표준 라이브러리). 하네스(harness/ · template
 python harness/validate.py --project <프로젝트>      # exit 0 이 아니면 실행하지 않는다 → graph-plan
 ```
 
-규모 S(CHECKLIST 모드)면 맨 아래 **S 실행** 으로.
+체크리스트 모드(`specs/CHECKLIST.md`)면 맨 아래 **체크리스트 실행** 으로.
 
 ## 시작 · 이어 하기
 
@@ -40,16 +40,13 @@ python harness/run.py status                       # 상태 · 실패 · 대기 
    | --- | --- |
    | CODE | `python harness/run.py exec <id>` — 하네스가 cmd · 게이트를 돌리고 쓰기를 반영한다 |
    | AGENT | `run.py begin <id>` → 스펙의 files 안에서만 구현 → `run.py finish <id> --set 필드=값 [--evidence 경로]` (게이트는 하네스가 돌린다) |
-   | JUDGE | `run.py begin <id>` → 질문마다 원자 판단 → JEV 형식 답을 파일로 → `run.py judge <id> --answers <파일>` |
    | HUMAN | `run.py wait <id> --reason "…"` → **역질문** → `run.py answer <id> --action <값> --note "…"` |
 
    - 상태 값이 필요하면 `state/state.json` 을 읽는다 (CODE 노드는 환경변수 `HARNESS_STATE`).
    - 스펙 밖의 파일을 고쳐야 한다고 판단되면 **고치지 말고** 역질문 → "스펙 수정(graph-plan)"을 선택지로.
    - 에이전트가 스스로 막혔으면 `run.py fail <id> --cause <분류> --symptom "…"` 로 남긴다 (분류: transient · input · contract_violation · structural).
-3. 노드 스펙의 `impl` 을 `IMPLEMENTED`(구현함) → 게이트 PASS 면 `VERIFIED` 로 올린다.
-   `impl` 은 진행 표시라 Run 고정(graph digest)에서 빠진다 — 이것만 바꾸면 migrate 가 필요 없다. 다른 칸을 바꾸면 그건 스펙 변경이다(graph-plan).
-4. 그림을 갱신한다: `python harness/render.py --project <프로젝트>`.
-5. `run.py next` 로 다음 웨이브.
+3. 그림을 갱신한다: `python harness/render.py --project <프로젝트>`.
+4. `run.py next` 로 다음 웨이브.
 
 ## 하네스 종료 코드 → 할 일
 
@@ -60,7 +57,7 @@ python harness/run.py status                       # 상태 · 실패 · 대기 
 | exit 0 · ready 목록 | 계속 | 다음 노드 |
 | exit 3 · `failed_retryable` | 선언된 retry 한도 안 | **묻지 않고** 같은 노드를 다시 (AGENT 면 게이트 로그를 읽고 고친 뒤) — 한도는 하네스가 센다 |
 | exit 1 · `ERROR:` | 명령을 잘못 불렀다 (예: ready 가 아닌 노드) | `run.py next` 를 보고 바로잡는다. 스펙 문제면 graph-plan |
-| exit 2 · `⚠ 사람 판단 필요` | FAIL · STUCK · BLOCKED · waiting_human · 스펙 변경 · running 만 남음 · 하네스 오류 | **역질문** |
+| exit 2 · `⚠ 사람 판단 필요` | FAIL · STUCK · BLOCKED · waiting_human · running 만 남음 · 하네스 오류 | **역질문** |
 
 ## 역질문 (AGENTS.md 3절 · `templates/ASK.md`)
 
@@ -72,13 +69,11 @@ python harness/run.py status                       # 상태 · 실패 · 대기 
 
 ## 병렬 웨이브 (사람이 승인했을 때만)
 
-- `run.py next` 가 둘 이상을 주면, graph-plan 에서 병렬(과 모드)을 승인했는지 확인한다. 아니면 순차로 하거나 지금 묻는다.
+- `run.py next` 가 둘 이상을 주면, graph-plan 에서 병렬을 승인했는지 확인한다. 아니면 순차로 하거나 지금 묻는다.
 - **공통**: `run.py begin` · `finish` 는 **메인 세션만** 부른다 (이벤트 작성자는 하나). 하위 에이전트는 자기 노드의 `files` 만 고치고,
   끝나면 "바뀐 파일 목록 · 쓸 필드 값"을 보고한다. 하위 에이전트를 띄우는 법은 도구마다 다르고(Claude Code 의 서브에이전트 등),
-  **지원하지 않으면 순차로 한다** — 결과는 같고 시간만 다르다. 같은 영역의 다음 노드는 같은 하위 에이전트에 이어 맡기면(lane) 맥락 · 토큰을 아낀다.
+  **지원하지 않으면 순차로 한다** — 결과는 같고 시간만 다르다. 같은 폴더의 다음 노드는 같은 하위 에이전트에 이어 맡기면 맥락 · 토큰을 아낀다.
 - `begin` 은 진행 중인 노드와 고치는 경로가 겹치면 거부한다. validate 8행(정적) + begin(실행 중) 두 겹이다.
-
-**모드 A — 같은 폴더** (기본 · 영역이 서로 다른 폴더에 쓰고 빌드 산출물도 그 안일 때)
 
 ```text
 run.py begin T11-api ; run.py begin T12-web          ← 메인
@@ -86,49 +81,32 @@ run.py begin T11-api ; run.py begin T12-web          ← 메인
 run.py finish T11-api --set api.done=true --changed <보고받은 파일들>   ← 바뀐 파일 ⊆ files 를 하네스가 본다
 ```
 
-**모드 B — 영역별 worktree** (`harness/lanes.py` · **사람이 고를 때만** — 루트 캐시 · node_modules · 무거운 빌드가 영역끼리 부딪힐 때. 대부분은 모드 A 로 충분하다)
-
-```text
-1 W0(계약)이 끝나면 lanes.py checkpoint --dry-run 으로 커밋할 목록을 뽑아
-  역질문 ② 에 보여 주고 "체크포인트 커밋을 할까요" → 승인 → run.py decide … → lanes.py checkpoint --note "…"
-2 lanes.py open api ; lanes.py open web      ← 지금 메인 HEAD 에서 영역마다 worktree · 브랜치. 출력된 폴더를 하위 에이전트에 준다
-3 run.py begin … (메인) → 하위 에이전트가 자기 worktree 의 영역 폴더만 고친다
-4 lanes.py merge api --note "…"             ← 영역 root 만 커밋해 메인에 병합 · finish 에 줄 --changed 목록을 출력
-                                              (영역 밖 변경 · 변경 0개 · 병합 실패는 exit 2)
-5 run.py finish T11-api --changed <4 가 출력한 목록> --set …   ← 바뀐 파일 ⊆ files · 게이트는 병합된 메인 코드로
-6 영역의 노드가 다 끝나면 lanes.py close api   (병합 안 된 작업이 있으면 거부 — 버릴지는 사람이 정해 --force)
-```
-
-- 병합 실패 · 영역 밖 변경 · 계약 위반 · 통합(e2e) 실패는 역질문 (`templates/ASK.md` 의 "영역 병렬" 선택지).
-- 체크포인트 커밋은 사람의 저장소에 기록을 남기는 일이라 **반드시 먼저 묻는다.** 하네스 기록(trace · state · evidence · memory · diagrams)은 커밋하지 않고, 비밀로 보이는 파일이 있으면 lanes.py 가 멈춘다.
-
 **사람 대기 중**: `next` 가 대기(exit 2)와 함께 관계없는 ready 를 보여 주면 — **먼저 묻고**, 답을 기다리는 동안 그 ready 는 진행해도 된다
 (하위 에이전트가 돌고 있으면 그대로 둔다). 대기 노드의 하류는 상태값 때문에 돌지 않는다.
 
 ## 검토 (DONE · STOPPED 뒤)
 
-1. `python harness/render.py` · `python harness/report.py`.
+1. `python harness/render.py`.
 2. REQ 마다 수용 기준을 실제 증거와 대조한다 (`evidence/…/result.json` · gate.log). 확인하지 않은 것을 확인했다고 쓰지 않는다.
 3. 문제는 **최대 3개**, 각각 근거 파일 경로 + 해결책 + 확인 방법.
 4. 보고 형식:
 
 ```text
 상태        : SUCCESS | STOPPED | 진행 중(<phase>)
-Run         : <run_id> · graph v<N> · 시도 <n>
+Run         : <run_id> · 시도 <n>
 REQ         : REQ-F1 ✓ (근거 경로) · REQ-N1 ✓ · …   (확인 못 한 것은 ✗ 와 이유)
 사람 결정   : N건 (memory/DECISIONS.md)
-실패        : N건 · 패턴 <n> · 후보 <n> (report.py)
-처방 가지   : 탄 것과 결과 · 없으면 "타지 않음"
+실패        : N건 (memory/TROUBLESHOOTING.md · 같은 증상 반복 여부)
 그림        : diagrams/graph.md · timeline.md
 문제 (≤3)   : 1) … — 근거 · 해결책 · 확인 방법
 ```
 
-`SUCCESS` 가 아니면 성공했다고 쓰지 않는다. 패턴이 있으면 "graph-plan detour 로 처방 가지 검토"를 다음 할 일로 제안한다.
+`SUCCESS` 가 아니면 성공했다고 쓰지 않는다. 같은 실패가 반복되면 "graph-plan 으로 스펙 · 계약 보강"을 다음 할 일로 제안한다.
 
-## S 실행 (체크리스트 모드)
+## 체크리스트 실행 (S · M)
 
 `specs/CHECKLIST.md` 의 단계를 차례로: 할 일 → `check` 명령을 실제로 돌림 → `result` 칸에 결과(exit · 값)를 적는다.
-실패하면 역질문. 이벤트 · 그림은 없다. 단계가 늘거나 분기가 생기면 역질문으로 M 으로 올릴지 묻는다.
+실패하면 역질문. 이벤트 · 그림은 없다. 병렬 · 부작용 승인 분기가 필요해지면 역질문으로 개발 그래프(L)로 올릴지 묻는다.
 
 ## 하지 않는 것
 

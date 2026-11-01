@@ -1,0 +1,4 @@
+{"input": {"q": "1+2"}, "expect": {"result": 3}}
+{"input": {"q": "(3 + 4) * 2"}, "expect": {"result": 14}}
+{"input": {"q": "10 / 4"}, "expect": {"result": 2.5}}
+{"input": {"q": "-5 + 2"}, "expect": {"result": -3}}

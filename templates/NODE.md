@@ -1,21 +1,18 @@
 # <노드 id> — <한 줄 이름>
 
 > 양식: `templates/NODE.md` · 노드 하나 = 파일 하나 (`specs/nodes/<id>.md`) · 정본은 ```harness 블록.
-> id 규칙: 종류 접두어 + 번호 + 이름 — `T`(task: CODE/AGENT) · `C`(검사기) · `F`(처방 가지 fix) · `J`(JUDGE) · `H`(HUMAN).
+> id 규칙: 종류 접두어 + 번호 + 이름 — `T`(task: CODE/AGENT) · `C`(검사기) · `H`(HUMAN).
 
 | 칸 | 값 |
 | --- | --- |
-| 종류 | CODE · AGENT · HUMAN · JUDGE |
-| 계층 · 경계 | |
+| 종류 | CODE · AGENT · HUMAN |
 | 맡은 REQ | |
 | 준비 조건 (`requires`) | 이 조건들이 모두 참이면 ready — 계약 필드에만 건다 |
 | 쓰는 필드 (`writes`) | 이 노드가 주인인 필드만 |
 | 고치는 파일 (`files`) | 이 밖은 고치지 않는다. 파일(`a/b.py`) · 폴더(`web/` — 끝의 `/`) · `web/src/**`. 같은 웨이브의 다른 노드와 겹치지 않는다 |
-| 영역 (`area`) | 폴더 단위 병렬일 때 — GRAPH `areas` 의 이름. `files` 는 그 폴더 안 (계약 · 통합 노드는 비운다) |
 | 게이트 | 명령 · 통과 기준 (값으로) |
-| 실패 처리 | retry(일시적 오류 · 노드 안의 수정 반복) · 처방 가지 · 역질문 |
+| 실패 처리 | retry(일시적 오류 · 노드 안의 수정 반복) · 그 밖은 역질문 |
 | 하지 않는 것 | |
-| 구현 상태 (`impl`) | DRAFT → IMPLEMENTED → VERIFIED |
 
 ## 하는 일
 
@@ -23,8 +20,8 @@
 
 ## 종류별 칸
 
-- **게이트 폴더**: `"gate": {"cmd": "npm test", "cwd": "web"}` — 영역 폴더에서 테스트할 때. 프로젝트 안 상대 경로만.
-- **바뀐 파일 확인**: 병렬로 돌린 노드는 `run.py finish <id> --changed <파일…>` 로 바뀐 파일 ⊆ `files` 를 하네스가 본다 (모드 A 는 하위 에이전트의 보고, 모드 B 는 `lanes.py merge` 가 낸 목록). 폴더 · `./` · `..` 는 바뀐 파일로 받지 않는다.
+- **게이트 폴더**: `"gate": {"cmd": "npm test", "cwd": "web"}` — 하위 폴더에서 테스트할 때. 프로젝트 안 상대 경로만.
+- **바뀐 파일 확인**: 병렬로 돌린 노드는 `run.py finish <id> --changed <파일…>` 로 바뀐 파일 ⊆ `files` 를 하네스가 본다 (하위 에이전트의 보고). 폴더 · `./` · `..` 는 바뀐 파일로 받지 않는다.
 - **명령 공통**: `cmd` · `gate.cmd` 의 파이썬은 `{python}` 으로 쓴다 — 하네스가 자기 실행 파일로 바꾼다 (Windows `python` · macOS/Linux `python3` 차이 없음).
   셸은 OS 기본(Windows cmd · 그 밖은 sh)이라 셸마다 다른 따옴표 · 파이프 · `&&` 는 피하고, 복잡하면 `tools/*.py` 스크립트로 뺀다.
 - **실패 원인**: cmd 가 0 이 아닌 값으로 끝나면 기본은 `contract_violation`(사람에게). 네트워크처럼 다시 하면 될 수 있는 실패의 exit 코드만
@@ -32,19 +29,9 @@
 - **CODE**: `cmd` — 하네스가 직접 실행한다. 상태는 환경변수 `HARNESS_STATE`(state.json 경로)로 읽고, 쓰기는 stdout 에 `HARNESS_WRITES {"필드": 값}` 한 줄.
 - **AGENT**: 에이전트가 `run.py begin` → 작업 → `run.py finish --set 필드=값`. 게이트는 finish 때 하네스가 돌린다.
   테스트를 고쳐 가며 다시 해야 하는 일이면 `"retry": {"max": 2, "on": ["contract_violation"]}` — 루프는 노드 안에, 한도와 함께.
-- **JUDGE** (JEV 패턴): 원자 질문을 `choice`(선택지 + 확률) · `score`(2~10단계 척도의 기대값) · `noul`(예일 확률)로.
-  답은 `run.py judge --answers` 에 `{"<이름>": {"choice"|"score"|"yes": 값, "confidence": 0~1, "probabilities": {...}}}`.
-  confidence < `judge.auto` 면 하네스가 사람 대기로 둔다. 숫자 계산 · 세기는 판단에 맡기지 않고 CODE 노드가 한다.
+  LLM 의 판단이 필요한 일도 AGENT 노드다 — 판단 결과는 enum 필드로 쓰고, 맞는지는 게이트 · 검사기가 잰다.
 - **HUMAN**: `human.actions` = `human.field`(enum)의 값. `note_field` 는 자유 문장(분기에 안 씀 · 비어도 된다).
   부작용을 여는 승인 값은 `human.approve` 에 적는다 (예: `["publish"]`) — 부작용 노드는 이 값으로만 열린다.
-- **처방 가지** (유일한 순환 · 이 설명이 정본): 실패 기록이 [패턴](서로 다른 Run 3곳 이상 · `report.py`)이고 고칠 법이 정해졌을 때만 만든다.
-
-  ```text
-  검사기 C 가 failure_kind(enum)에 <이름> 을 쓴다      ← enum 값 추가
-  F<n>-fix-<이름>: requires ["<C>.failure_kind == <이름>"] · writes ["fix_<이름>.applied"(int)]
-                   rerun_on ["<C>.failure_kind"] · max_runs 2
-  검사기 C: rerun_on 에 "fix_<이름>.applied" · max_runs ≥ 3   ← 검사기로 복귀해 같은 자로 다시 잰다
-  ```
 - **부작용**: `side_effect.class` · `idempotency_key` · requires 에 `<HUMAN 필드> == <human.approve 의 값>` (`exists` · `!=` · 거절 값은 ERROR).
 
 ```harness
@@ -52,9 +39,6 @@
   "kind": "node",
   "id": "T01-example",
   "type": "AGENT",
-  "impl": "DRAFT",
-  "layer": "",
-  "boundary": "",
   "reqs": ["REQ-F1"],
   "requires": ["input_path exists"],
   "writes": ["report.status"],

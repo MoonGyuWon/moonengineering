@@ -1,9 +1,8 @@
 """셀프테스트용 정상 프로젝트 — 하네스의 모든 모양을 한 번씩 쓴다.
 
     T01-load ─▶ T02a-stats ─┐                     (병렬 웨이브: T02a · T02b)
-             └▶ T02b-stats ─┴▶ C03-check ─▶ J05-review(JUDGE) ─▶ H06-approve(HUMAN) ─▶ T07-publish(부작용)
-                                  ▲   │ failure_kind == encoding
-                                  └─ F04-fix-encoding (처방 가지 · rerun_on 으로 검사기 재실행 · 한도)
+             └▶ T02b-stats ─┴▶ C03-check ─▶ H06-approve(HUMAN) ─▶ T07-publish(부작용)
+    X09-flaky (input_path == flaky 일 때만 · 일시적 오류 재시도)
 """
 from __future__ import annotations
 
@@ -29,7 +28,7 @@ REQUIREMENTS = {
 
 
 EMITS = {"T01": {"rows": [1, 2, 3]}, "T02a": {"stats_a": {"sum": 6}}, "T02b": {"stats_b": {"n": 3}},
-         "T07": {"report.status": "written"}}
+         "C03": {"check.verdict": "pass"}, "T07": {"report.status": "written"}}
 OK = f"{PY} -c exit(0)"
 
 
@@ -39,7 +38,7 @@ def _w(key: str) -> str:
 
 
 GRAPH = {
-    "kind": "graph", "graph_version": 1,
+    "kind": "graph",
     "budget": {"max_attempts_total": 40},
     "done_when": ["report.status == written"],
     "stop_when": ["approval.action == stop"],
@@ -49,61 +48,36 @@ GRAPH = {
         "stats_a": {"type": "dict", "owner": "T02a-stats"},
         "stats_b": {"type": "dict", "owner": "T02b-stats"},
         "check.verdict": {"type": "enum", "values": ["pass", "fail"], "owner": "C03-check"},
-        "check.failure_kind": {"type": "enum", "values": ["none", "encoding", "unknown"], "owner": "C03-check"},
-        "fix.applied": {"type": "int", "owner": "F04-fix-encoding"},
-        "review.verdict": {"type": "enum", "values": ["accepted", "rework"], "owner": "J05-review"},
         "approval.action": {"type": "enum", "values": ["publish", "stop"], "owner": "H06-approve"},
         "approval.note": {"type": "str", "owner": "H06-approve", "free_text": True},
         "report.status": {"type": "enum", "values": ["written"], "owner": "T07-publish"},
         "flaky.done": {"type": "bool", "owner": "X09-flaky"},
     },
     "nodes": [
-        {"kind": "node", "id": "T01-load", "type": "CODE", "layer": "data", "reqs": ["REQ-F1"],
+        {"kind": "node", "id": "T01-load", "type": "CODE", "reqs": ["REQ-F1"],
          "requires": ["input_path exists"], "writes": ["rows"],
          "cmd": _w("T01"), "gate": {"cmd": OK, "pass": "exit==0"}},
-        {"kind": "node", "id": "T02a-stats", "type": "CODE", "layer": "domain", "reqs": ["REQ-F2"],
+        {"kind": "node", "id": "T02a-stats", "type": "CODE", "reqs": ["REQ-F2"],
          "requires": ["rows exists"], "writes": ["stats_a"], "files": ["out/a.json"],
          "cmd": _w("T02a"), "gate": {"cmd": OK}},
-        {"kind": "node", "id": "T02b-stats", "type": "CODE", "layer": "domain", "reqs": ["REQ-F2"],
+        {"kind": "node", "id": "T02b-stats", "type": "CODE", "reqs": ["REQ-F2"],
          "requires": ["rows exists"], "writes": ["stats_b"], "files": ["out/b.json"],
          "cmd": _w("T02b"), "gate": {"cmd": OK}},
-        {"kind": "node", "id": "C03-check", "type": "CODE", "layer": "domain", "reqs": ["REQ-N1"],
-         "requires": ["stats_a exists", "stats_b exists"], "writes": ["check.verdict", "check.failure_kind"],
-         "rerun_on": ["fix.applied"], "max_runs": 3,
-         "cmd": f"{PY} tools/check.py", "gate": {"cmd": OK}},
-        {"kind": "node", "id": "F04-fix-encoding", "type": "CODE", "layer": "domain", "reqs": ["REQ-N1"],
-         "requires": ["check.failure_kind == encoding"], "writes": ["fix.applied"],
-         "rerun_on": ["check.failure_kind"], "max_runs": 2,
-         "cmd": f"{PY} tools/fix.py", "gate": {"cmd": OK}},
-        {"kind": "node", "id": "J05-review", "type": "JUDGE", "layer": "domain", "reqs": ["REQ-F3"],
-         "requires": ["check.verdict == pass"], "writes": ["review.verdict"],
-         "judge": {"auto": 0.85, "questions": [
-             {"name": "verdict", "type": "choice", "options": ["accepted", "rework"], "field": "review.verdict"}]}},
-        {"kind": "node", "id": "H06-approve", "type": "HUMAN", "layer": "interface", "reqs": ["REQ-F3"],
-         "requires": ["review.verdict == accepted"], "writes": ["approval.action", "approval.note"],
+        {"kind": "node", "id": "C03-check", "type": "CODE", "reqs": ["REQ-N1"],
+         "requires": ["stats_a exists", "stats_b exists"], "writes": ["check.verdict"],
+         "cmd": _w("C03"), "gate": {"cmd": OK}},
+        {"kind": "node", "id": "H06-approve", "type": "HUMAN", "reqs": ["REQ-F3"],
+         "requires": ["check.verdict == pass"], "writes": ["approval.action", "approval.note"],
          "human": {"actions": ["publish", "stop"], "approve": ["publish"], "field": "approval.action", "note_field": "approval.note"}},
-        {"kind": "node", "id": "T07-publish", "type": "CODE", "layer": "interface", "reqs": ["REQ-F3"],
+        {"kind": "node", "id": "T07-publish", "type": "CODE", "reqs": ["REQ-F3"],
          "requires": ["approval.action == publish"], "writes": ["report.status"],
          "side_effect": {"class": "external_publish", "idempotency_key": "run_id+T07-publish"},
          "cmd": _w("T07"), "gate": {"cmd": OK}},
-        {"kind": "node", "id": "X09-flaky", "type": "CODE", "layer": "data", "reqs": ["REQ-F1"],
+        {"kind": "node", "id": "X09-flaky", "type": "CODE", "reqs": ["REQ-F1"],
          "requires": ["input_path == flaky"], "writes": ["flaky.done"], "retry": {"max": 1, "on": ["transient"]}, "transient_exit": [3],
          "cmd": f"{PY} -c exit(3)", "gate": {"cmd": OK}},
     ],
 }
-
-CHECK_PY = '''import json, os, pathlib
-ok = pathlib.Path("data/encoding_ok").exists()
-w = {"check.verdict": "pass" if ok else "fail", "check.failure_kind": "none" if ok else "encoding"}
-print("HARNESS_WRITES " + json.dumps(w))
-'''
-FIX_PY = '''import json, os, pathlib
-st = json.loads(pathlib.Path(os.environ["HARNESS_STATE"]).read_text(encoding="utf-8"))
-cur = st["fields"].get("fix.applied", {}).get("value", 0)
-if os.environ.get("FIX_WORKS", "1") == "1":
-    pathlib.Path("data").mkdir(exist_ok=True); pathlib.Path("data/encoding_ok").write_text("ok")
-print("HARNESS_WRITES " + json.dumps({"fix.applied": cur + 1}))
-'''
 
 
 def block(obj) -> str:
@@ -115,8 +89,6 @@ def write(root: Path, req=None, graph=None, split_nodes=True):
     graph = copy.deepcopy(GRAPH if graph is None else graph)
     (root / "specs" / "nodes").mkdir(parents=True, exist_ok=True)
     (root / "tools").mkdir(exist_ok=True)
-    (root / "tools" / "check.py").write_text(CHECK_PY, encoding="utf-8")
-    (root / "tools" / "fix.py").write_text(FIX_PY, encoding="utf-8")
     (root / "tools" / "emit.py").write_text(
         "import json, sys\nE = " + json.dumps(EMITS) + "\nprint('HARNESS_WRITES ' + json.dumps(E[sys.argv[1]]))\n",
         encoding="utf-8")

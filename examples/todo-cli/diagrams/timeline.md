@@ -1,13 +1,13 @@
 <!-- harness/render.py 가 만든 파일 — 손으로 고치지 않는다 -->
 # 타임라인
 
-> 생성 2026-10-31T16:09:39 · graph v1 · Run run-20261031-152503
+> 생성 2026-11-01T14:32:21 · Run run-20261031-152503
 
 **DONE** · ready: - · 대기: - · 시도 8
 
 ```mermaid
 gantt
-  title run-20261031-152503 (graph v1)
+  title run-20261031-152503
   dateFormat YYYY-MM-DDTHH:mm:ss
   axisFormat %H:%M:%S
   section T01-store

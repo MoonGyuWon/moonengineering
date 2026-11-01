@@ -9,8 +9,6 @@ W4 · 수용 시나리오가 통과한 뒤에만 선다. 실제 사용자에게 
   "kind": "node",
   "id": "H05-approve",
   "type": "HUMAN",
-  "impl": "VERIFIED",
-  "layer": "interface",
   "boundary": "release",
   "reqs": [
     "REQ-F4"
