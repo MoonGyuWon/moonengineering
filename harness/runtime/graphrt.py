@@ -447,7 +447,7 @@ async function runs(sel){const r=await (await fetch('api/runs')).json();
 function watch(run){if(es)es.close();st={};$('#log').textContent='';$('#human').hidden=true;draw();
  es=new EventSource('api/events?run='+encodeURIComponent(run));es.onmessage=m=>{const e=JSON.parse(m.data);
   const t={node_start:'running',node_end:'done',answer:'done',node_fail:'failed',wait:'waiting'}[e.type];if(t)st[e.node]=t;
-  if(e.type=='run_end'||e.type=='run_start'||e.type=='resume')$('#status').textContent=e.status||'running';
+  if(e.type=='run_end'||e.type=='run_start'||e.type=='resume'||e.type=='wait')$('#status').textContent=e.status||(e.type=='wait'?'waiting':'running');
   if(e.type=='wait')ask(run,e);if(e.type=='answer')$('#human').hidden=true;
   const extra=e.writes&&e.type!='wait'?' '+JSON.stringify(e.writes):e.error?' ✖ '+e.error:e.msg?' '+e.msg:e.ms!=null?'':'';
   $('#log').textContent+=`${e.ts.slice(11)}  ${(e.node||'').padEnd(10)} ${e.type}${e.ms!=null?' '+e.ms+'ms':''}${extra}\n`;draw();};}
@@ -510,7 +510,10 @@ def serve(root: Path, port: int):
 
         def do_POST(self):
             u = urlparse(self.path)
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0)) or 0) or b"{}")
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0)) or 0) or b"{}")
+            except (ValueError, UnicodeDecodeError) as e:
+                return self.send(400, json.dumps({"error": f"요청 본문이 UTF-8 JSON 이 아닙니다 — {e}"}, ensure_ascii=False))
             g = load_graph(root)
             if u.path == "/api/run":
                 rid = new_run_id(root)
