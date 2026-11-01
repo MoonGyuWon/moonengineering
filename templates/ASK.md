@@ -18,7 +18,7 @@
 | 상황 | 명령 |
 | --- | --- |
 | HUMAN 노드의 답 | `run.py answer <노드> --action <값> --note "…"` |
-| 실패한 노드를 다시 | `run.py reset <노드> --note "…"` |
+| 실패한 노드를 다시 (하류도 함께 pending · 그들이 쓴 필드는 지워진다) | `run.py reset <노드> --note "…"` |
 | 예산 추가 | `run.py extend-budget <N> --note "…"` |
 | 그 밖의 결정 (범위 · 방향) | `run.py decide --topic "…" --choice "…" --options "a,b,c" --note "…"` |
 

@@ -204,6 +204,49 @@ def test_retry_and_reset():
         p.close()
 
 
+def test_reset_cascade():
+    print("[run · reset 은 하류까지 — 옛 값으로 하류가 서지 않는다]")
+    p = Proj()
+    try:
+        to_review(p)
+        check(p.ready() == ["H06-approve"], "검사까지 끝 → H06 ready")
+        code, out = p.run("reset", "T01-load", "--note", "입력 처리 고침")
+        f = p.status()["fields"]
+        check(p.ready() == ["T01-load"], "상류 reset → ready 는 그 노드만 (하류가 옛 값으로 서지 않음)", out + str(p.ready()))
+        check(not {"rows", "stats_a", "stats_b", "check.verdict"} & set(f) and f.get("input_path") == "data.csv",
+              "reset 한 노드와 하류가 쓴 필드는 지워지고 입력은 남는다", str(f))
+        dec = (p.d / "memory" / "DECISIONS.md").read_text(encoding="utf-8")
+        check("C03-check" in dec and "T02a-stats" in dec, "함께 reset 된 하류 노드가 DECISIONS 에 남는다", dec)
+        for nid in ("T01-load", "T02a-stats", "T02b-stats", "C03-check"):
+            p.run("exec", nid)
+        check(p.ready() == ["H06-approve"], "다시 돌리면 같은 자리로 돌아온다", str(p.ready()))
+    finally:
+        p.close()
+
+
+def test_stuck_recorded():
+    print("[run · 검사 노드가 fail 을 써서 STUCK → TROUBLESHOOTING 에 남는다]")
+    g = copy.deepcopy(F.GRAPH)
+    node(g, "C03-check")["cmd"] = "{python} tools/emit.py C03F"
+    p = Proj(graph=g)
+    try:
+        em = p.d / "tools" / "emit.py"
+        em.write_text(em.read_text(encoding="utf-8").replace("E = {", 'E = {"C03F": {"check.verdict": "fail"}, ', 1), encoding="utf-8")
+        p.run("start", "--set", "input_path=data.csv")
+        for nid in ("T01-load", "T02a-stats", "T02b-stats"):
+            p.run("exec", nid)
+        code, out = p.run("exec", "C03-check")
+        tr = p.d / "memory" / "TROUBLESHOOTING.md"
+        text = tr.read_text(encoding="utf-8") if tr.exists() else ""
+        check(code == 2 and "STUCK" in out, "검사 fail → STUCK · 역질문 (exit 2)", out)
+        check("STUCK" in text and "check.verdict" in text and "C03-check" in text and "fail" in text,
+              "막힌 조건 · 지금 값 · 쓴 노드가 TROUBLESHOOTING 에 남는다", text)
+        p.run("next")
+        check(tr.read_text(encoding="utf-8").count("\n## ") == text.count("\n## "), "같은 STUCK 을 다시 물어도 중복 기록하지 않는다")
+    finally:
+        p.close()
+
+
 def test_budget():
     print("[run · 예산]")
     g = copy.deepcopy(F.GRAPH)
@@ -509,13 +552,12 @@ def test_graphrt():
     conds = ["a == 1", "a != 1", "a >= 1", "f < 0.5", "s == x", 's == "x"', "s in [x, y]", "a in [2, 3]",
              "a exists", "z exists", "z missing", "z == 1", "s > 1"]
     check(all(S.eval_cond(c, vals) == G.eval_cond(c, vals) for c in conds), "조건식이 하네스(spec.py)와 같다 — 개발 · 실행 문법 하나")
-    demo = HARNESS.parent / "examples" / "graph-demo"
-    check((demo / "graphrt.py").read_bytes() == (HARNESS / "runtime" / "graphrt.py").read_bytes(),
-          "examples/graph-demo 의 graphrt.py 가 하네스 런타임과 같다 (복사본이 어긋나지 않음)")
+    demo = HERE / "graph_demo"  # 그래프 프로그램 fixture — 런타임은 시험 때 복사한다 (복사본이 어긋날 일이 없다)
     d = tmp()
     try:
         p = d / "demo"
         shutil.copytree(demo, p, ignore=shutil.ignore_patterns("runs", "__pycache__"))
+        shutil.copy2(HARNESS / "runtime" / "graphrt.py", p / "graphrt.py")
         code, out = gr(p, "eval")
         check(code == 0 and "FAIL" not in out, "graph-demo 골든셋 전부 통과 (노드별 + e2e)", out)
         code, out = gr(p, "run", "--input", '{"q": "아무 말"}')
@@ -612,6 +654,8 @@ def main() -> int:
     test_validate()
     test_happy_path()
     test_retry_and_reset()
+    test_reset_cascade()
+    test_stuck_recorded()
     test_budget()
     test_stop()
     test_render()

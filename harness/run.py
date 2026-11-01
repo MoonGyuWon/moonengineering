@@ -112,9 +112,13 @@ def fold(events: list[dict], run_id: str) -> dict:
         elif t == "wait":
             n["status"] = "waiting_human"
             n["wait_reason"] = ev.get("reason")
-        elif t == "reset":
-            n["status"] = "pending"
-            n["attempts"] = 0
+        elif t == "reset":  # 하류까지 — cascade 의 노드는 pending, cleared 의 필드는 지운다 (옛 값으로 하류가 서지 않게)
+            for nid in ev.get("cascade") or [ev["node"]]:
+                m = st["nodes"].setdefault(nid, {"status": "pending", "attempts": 0, "runs": 0})
+                m["status"], m["attempts"] = "pending", 0
+            for f in ev.get("cleared", []):
+                st["fields"].pop(f, None)
+            st["ended"] = st["result"] = None
         elif t == "budget":
             st["budget_extra"] += ev["add"]
         elif t == "run_end":
@@ -147,6 +151,33 @@ def ready_nodes(spec: dict, st: dict) -> list[str]:
         startable = ns["status"] == "pending" or (ns["status"] == "failed_retryable" and ns["attempts"] <= retry_max)
         if startable and all(S.eval_cond(c, vals) for c in n.get("requires", [])):
             out.append(n["id"])
+    return out
+
+
+def downstream(spec: dict, nid: str) -> list[str]:
+    """nid 와, requires 를 따라 그 뒤에 오는 모든 노드 (nid 가 먼저)."""
+    edges = S.derived_edges(spec)
+    out, seen = [nid], {nid}
+    for x in out:
+        for e in edges:
+            if e["source"] == x and e["target"] not in seen:
+                seen.add(e["target"])
+                out.append(e["target"])
+    return out
+
+
+def blocked_by(spec: dict, st: dict) -> list[dict]:
+    """pending 인데 서지 못하는 노드마다 거짓인 조건 · 지금 값 · 그 값을 쓴 노드."""
+    vals = values_of(st)
+    out = []
+    for n in spec["nodes"]:
+        if node_state(st, n["id"])["status"] != "pending":
+            continue
+        for c in n.get("requires", []):
+            if not S.eval_cond(c, vals):
+                f = S.parse_cond(c)[0]
+                out.append({"node": n["id"], "cond": c, "value": vals.get(f, "(없음)"),
+                            "by": st["fields"][f]["by"] if f in st["fields"] else None})
     return out
 
 
@@ -376,7 +407,18 @@ def cmd_next(c: Ctx, a) -> int:
                            if s["ready"] else ""))
     if s["phase"] == "STUCK":
         why = [f"{nid}[{st['nodes'][nid].get('last_cause')}] {st['nodes'][nid].get('last_symptom')}" for nid in s["failed"]]
-        return human_exit("실행할 수 있는 노드가 없고 완료 조건도 거짓입니다 (STUCK). " + ("실패: " + " / ".join(why) if why else ""))
+        blocked = blocked_by(c.spec, st)
+        text = " / ".join(f"{b['node']} 조건 거짓: {b['cond']} (지금 {b['value']!r}" + (f" · {b['by']} 가 씀)" if b["by"] else ")")
+                          for b in blocked[:5])
+        mine = [e for e in c.store.events() if e.get("run_id") == st["run_id"]]
+        if not s["failed"] and blocked and mine[-1]["type"] != "stuck":  # 실패 기록이 없는 STUCK 만 · 같은 STUCK 은 한 번
+            writers = list(dict.fromkeys(b["by"] for b in blocked if b["by"] and b["by"] != S.INPUT_OWNER))
+            ev = c.ev(st, type="stuck", blocked=blocked[:10])
+            evid = [str(evidence_dir(c, w, st).relative_to(c.root)).replace("\\", "/") for w in writers if w in st["nodes"]]
+            record_failure(c.root, st, {**ev, "node": ", ".join(writers) or "(그래프)", "status": "STUCK",
+                                        "symptom": text, "cause": "갈 곳 없음 (상태값이 하류를 막음)", "evidence": evid})
+        return human_exit("실행할 수 있는 노드가 없고 완료 조건도 거짓입니다 (STUCK). " +
+                          ("실패: " + " / ".join(why) if why else text))
     if not s["ready"] and s["running"]:
         if getattr(a, "internal", False):  # finish 직후 — 형제 노드가 아직 하위 에이전트에서 도는 중. 소음으로 묻지 않는다
             print("ready 없음 · 진행 중:", ", ".join(s["running"]), "— 그 결과를 기다려 finish 한다")
@@ -623,8 +665,12 @@ def cmd_reset(c: Ctx, a) -> int:
     ns = node_state(st, a.node)
     if ns["status"] not in ("failed", "failed_retryable", "executed", "cancelled", "running", "waiting_human"):
         raise S.SpecError(f"{a.node} 는 reset 할 수 없는 상태입니다 ({ns['status']})")
-    ev = c.ev(st, type="reset", node=a.node, note=a.note)
-    record_decision(c.root, st, ev, f"{a.node} 재실행", "reset", a.note)
+    cascade = [x for x in downstream(c.spec, a.node) if x == a.node or node_state(st, x)["status"] != "pending"]
+    cleared = sorted(f for f, v in st["fields"].items() if v["by"] in cascade)
+    ev = c.ev(st, type="reset", node=a.node, note=a.note, cascade=cascade, cleared=cleared)
+    more = f" (하류 함께: {', '.join(cascade[1:])})" if len(cascade) > 1 else ""
+    record_decision(c.root, st, ev, f"{a.node} 재실행{more}", "reset", a.note)
+    print(f"reset: {a.node}{more} · 지운 필드 {cleared or '없음'}")
     return cmd_next(c, argparse.Namespace(json=False))
 
 

@@ -110,3 +110,14 @@ selftest 103개 (frontend/backend 형 그래프를 같은 폴더 · worktree 두
 | 계층 그림 · `diagrams/index.html` · `install --with-agents` | `graph.md` · `timeline.md` 만 |
 
 selftest 111개 (지운 기능의 검사만 빠짐) · `PYTHONUTF8` 없이도 통과 (cp949 문제는 report.py 검사에 있었다).
+
+## 최고난도 시험 · 하네스 수정 (2026-11-01)
+
+통근버스 최적화(1500명 · 5만 회 · ALNS · 확률 제약)를 L 개발 그래프로 끝까지 돌려 하네스를 시험했다 — 요구사항 충돌 역질문 · 병렬 하위 에이전트 6개 ·
+`--changed` 의 files 밖 거부 · C09 재현성 FAIL → 역질문 → 고침까지 실제로 탔다. 시험에서 나온 하네스 빈틈 두 개를 고쳤다 (selftest 111 → 118 · 새 시험 8개 · 복사본 비교 1개는 시험 때 복사로 대체).
+
+- **reset 이 하류까지** — 상류 노드를 reset 해도 하류가 옛 필드 값으로 ready 가 되던 것. 이제 reset 이벤트가 `cascade`(그 노드와 requires 로 이어진 하류 중 돈 것)와
+  `cleared`(그들이 쓴 필드)를 담고, fold 가 그대로 접는다. 끝난 Run 도 다시 열린다.
+- **조용한 STUCK 도 기록** — CODE 검사 노드가 `fail` 을 써서 하류가 막히면 실패 기록 없이 STUCK 만 나던 것. 이제 막힌 조건 · 지금 값 · 쓴 노드 · 증거를
+  `memory/TROUBLESHOOTING.md` 에 한 번 남긴다 (`stuck` 이벤트로 중복 방지).
+- **examples/ 삭제** — 하네스를 쓸 때 필요 없는 리허설이었다. selftest 가 쓰던 graph-demo 만 `harness/selftest/graph_demo/` 로 옮겼다 (런타임은 시험 때 복사).

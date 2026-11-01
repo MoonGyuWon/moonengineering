@@ -1,5 +1,0 @@
-$ python tools/release.py
-(cwd C:\Users\moon\myharness\moonengineering\examples\todo-cli · exit 0 · 0.1초)
-
-배포: dist\todo-cli-v1
-HARNESS_WRITES {"release.status": "done"}

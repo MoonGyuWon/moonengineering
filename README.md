@@ -22,7 +22,7 @@
 - **개발 과정은 가볍게** — S · M 은 체크리스트로 끝난다. 개발 그래프는 L(여러 모듈 · 부작용 승인 · 승인된 병렬)에서만.
 - **완성품은 맞는 구조로** — 만드는 법 카드(`templates/BLUEPRINT.md`)의 5개 규칙 중 3개 이상이면 그래프 프로그램:
   `harness/runtime/graphrt.py`(파일 하나 · 표준 라이브러리)가 프로그램에 복사돼 하네스 없이 돈다 — 노드 하나 = 파일 하나 = 골든셋 하나,
-  `eval` 로 노드만 · 전체 회귀, `serve` 로 실시간 로그 화면. 예: `examples/graph-demo`.
+  `eval` 로 노드만 · 전체 회귀, `serve` 로 실시간 로그 화면. 예: `harness/selftest/graph_demo` (selftest 재료).
 - **수치로 판정한다** — 정확도 · 지연 같은 지표는 `harness/metric.py` 가 임계값 · 기준선 회귀로 게이트한다 (0 통과 · 1 실패).
 - **승인된 병렬** — 같은 웨이브의 노드끼리 파일이 겹치지 않으면(validate 8행) 하위 에이전트가 동시에 만들고, 바뀐 파일 ⊆ `files` 를 하네스가 본다.
 - **도구 중립** — 규칙은 `AGENTS.md`, 스킬은 [Agent Skills 표준](https://agentskills.io/specification)의 `.agents/skills/`.
@@ -85,7 +85,6 @@ AGENTS.md  CLAUDE.md  README.md
 templates/           QUESTION_BANK · REQUIREMENTS · BLUEPRINT · CHECKLIST · GRAPH · NODE · ASK
 harness/             spec · validate · run · render · metric · sync_skills · install(프로젝트 연결) · selftest/
 harness/runtime/     graphrt.py — 그래프 프로그램 런타임 (프로그램에 복사된다)
-examples/            리허설 — csv-summary (체크리스트) · todo-cli (개발 그래프) · graph-demo (그래프 프로그램)
 docs/HISTORY.md
 
 (하네스를 쓰는 프로젝트에 생기는 것)
